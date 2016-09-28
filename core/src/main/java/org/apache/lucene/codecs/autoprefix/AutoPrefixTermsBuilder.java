@@ -65,7 +65,10 @@ public class AutoPrefixTermsBuilder implements Closeable {
 
     private List<PrefixTerm> prefixes = new ArrayList<>();
     // The root of the compact prefix tree
+
     private AutoPrefixNode root;
+    private AutoPrefixNode current;
+
     private final FixedBitSet docsSeen;
     private PostingsEnum reusePE;
 
@@ -158,7 +161,7 @@ public class AutoPrefixTermsBuilder implements Closeable {
             assert suffix.compareTo(node.prefix) > 0 : "Not sorted";
             flushPrefix(prefix, node, output);
             node.prefix = BytesRef.deepCopyOf(suffix);
-            node.children.clear();
+            node.child = null;
             node.numTerms = 1;
             node.docIdSetB = or(docIdSet, newDocIdSetBuilder());
             return;
@@ -174,28 +177,28 @@ public class AutoPrefixTermsBuilder implements Closeable {
                 // there's a child that can possibly share the remaining suffix.
                 boolean found = false;
                 BytesRef newPrefix = concatenate(prefix, node.prefix);
-                Iterator<AutoPrefixNode> it = node.children.iterator();
-                while (it.hasNext()) {
-                    AutoPrefixNode child = it.next();
+                AutoPrefixNode child = node.child;
+                if (child != null) {
                     if (child.prefix.bytes[child.prefix.offset] == nextSuffix.bytes[nextSuffix.offset]) {
-                        assert found == false : "Found twice";
                         innerPushTerm(child, newPrefix, nextSuffix, docIdSet, output);
                         found = true;
                     } else {
                         // does not match the remaining part, we can flush this part of the tree
                         assert nextSuffix.compareTo(child.prefix) > 0 : "Not sorted";
                         flushPrefix(newPrefix, child, output);
-                        it.remove();
+                        node.child = null;
                     }
                 }
+
                 if (found) {
                     // found a child that matches the remaining suffix
                     return;
                 }
+
                 // No child exist with any prefix so we add a new one
-                assert node.children.isEmpty();
-                node.children.add(new AutoPrefixNode(node, BytesRef.deepCopyOf(nextSuffix), 1,
-                    or(docIdSet, newDocIdSetBuilder())));
+                assert node.child == null;
+                node.child = new AutoPrefixNode(node, BytesRef.deepCopyOf(nextSuffix), 1,
+                    or(docIdSet, newDocIdSetBuilder()));
                 return;
             }
             // The candidate suffix and the prefix located in this node share a prefix so we need to split the node
@@ -208,10 +211,10 @@ public class AutoPrefixTermsBuilder implements Closeable {
 
             // and then we split the node with the remaining part of the suffix candidate.
             node.prefix = BytesRef.deepCopyOf(splitPrefix);
-            node.children.clear();
+            assert node.child == null;
             AutoPrefixNode newNode = new AutoPrefixNode(node, BytesRef.deepCopyOf(splitSuffix), 1,
                 or(docIdSet, newDocIdSetBuilder()));
-            node.children.add(newNode);
+            node.child = newNode;
         }
     }
 
@@ -233,17 +236,19 @@ public class AutoPrefixTermsBuilder implements Closeable {
             node.docIdSetB = newDocIdSetBuilder();
         }
         BytesRef newPrefix = concatenate(prefix, node.prefix);
-        for (AutoPrefixNode child : node.children) {
-            DocIdSet childDocIdSetB = innerFlushPrefix(newPrefix, child, output);
+
+        if (node.child != null) {
+            DocIdSet childDocIdSetB = innerFlushPrefix(newPrefix, node.child, output);
             or(childDocIdSetB, node.docIdSetB);
         }
+
         DocIdSet docIdSet = node.docIdSetB.build();
         node.docIdSetB = null;
-        if (node.numTerms >= minTermsInAutoPrefix) {
-            DocIdSetIterator it = docIdSet.iterator();
-            PrefixTerm prefixTerm = flushInvertedList(newPrefix, output, it);
-            prefixes.add(prefixTerm);
-        }
+        node.child = null;
+
+        DocIdSetIterator it = docIdSet.iterator();
+        PrefixTerm prefixTerm = flushInvertedList(newPrefix, output, it);
+        prefixes.add(prefixTerm);
         return docIdSet;
     }
 

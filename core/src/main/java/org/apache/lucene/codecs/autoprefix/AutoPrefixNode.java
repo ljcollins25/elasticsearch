@@ -26,7 +26,7 @@ import org.apache.lucene.util.DocIdSetBuilder;
 class AutoPrefixNode {
     BytesRef prefix;
     AutoPrefixNode parent;
-    List<AutoPrefixNode> children = new LinkedList<>();
+    public AutoPrefixNode child;
     int numTerms;
     DocIdSetBuilder docIdSetB;
 
