@@ -53,17 +53,16 @@ public class AutoPrefixQuery extends Query {
         return null;
     }
 
+    /** Returns true iff <code>o</code> is equal to this. */
     @Override
-    public boolean equals(Object o) {
-        if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
-        AutoPrefixQuery that = (AutoPrefixQuery) o;
-        return prefix.equals(that.prefix);
+    public boolean equals(Object other) {
+        return sameClassAs(other) &&
+            prefix.equals(((AutoPrefixQuery) other).prefix);
     }
 
     @Override
     public int hashCode() {
-        return prefix.hashCode();
+        return classHash() ^ prefix.hashCode();
     }
 
     final class AutoPrefixWeight extends ConstantScoreWeight {
