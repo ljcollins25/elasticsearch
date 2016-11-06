@@ -55,6 +55,7 @@ public class StoredFilterFieldsBuilder {
     private Set<String> newSegments;
 
     private Fields priorFields;
+    private int maxDoc;
 
     private List<FilterData> filters = new ArrayList<>();
 
@@ -65,18 +66,15 @@ public class StoredFilterFieldsBuilder {
         this.segmentTerms = new HashMap<>();
     }
 
-    public void AddFilter(String name, Query filter)
-    {
+    public void AddFilter(String name, Query filter) {
 
     }
 
-    public void DeleteFilter(String name)
-    {
+    public void DeleteFilter(String name) {
 
     }
 
-    private class FilterData implements Comparable<FilterData>
-    {
+    private class FilterData implements Comparable<FilterData> {
         public String name;
         public BytesRef nameBytes;
         public Query query;
@@ -93,18 +91,14 @@ public class StoredFilterFieldsBuilder {
         DirectoryReader reader = DirectoryReader.open(writer);
 
         // Get set of active segments
-        for (SegmentCommitInfo segmentInfo : segments)
-        {
+        for (SegmentCommitInfo segmentInfo : segments) {
             activeSegments.add(segmentInfo.info.name);
         }
 
         Collections.sort(filters);
-
-
     }
 
-    public SegmentWriteState createStoredFilterSegmentWriteState(IndexReader reader, IndexWriter writer, int maxDoc)
-    {
+    public SegmentWriteState createStoredFilterSegmentWriteState(IndexReader reader, IndexWriter writer, int maxDoc) {
         SegmentInfos infos = null;
         String segmentFileName = IndexFileNames.fileNameFromGeneration("storedfilters", "", infos.getLastGeneration());
 
@@ -121,8 +115,7 @@ public class StoredFilterFieldsBuilder {
 
         FieldInfo[] fields = new FieldInfo[activeSegments.size()];
         int i = 0;
-        for (String segmentName : activeSegments)
-        {
+        for (String segmentName : activeSegments) {
             fields[i] = new FieldInfo(
                 segmentName,
                 i,
@@ -142,9 +135,8 @@ public class StoredFilterFieldsBuilder {
             new IOContext(new FlushInfo(maxDoc, maxDoc * activeSegments.size())));
     }
 
-    public Fields buildFields()
-    {
-        int maxDoc = 0;
+    public Fields buildFields() {
+        maxDoc = 0;
         for (LeafReaderContext context : searcher.getIndexReader().leaves()) {
             SegmentReader reader = segmentReader(context.reader());
             maxDoc = Math.max(maxDoc, reader.maxDoc());
@@ -168,143 +160,37 @@ public class StoredFilterFieldsBuilder {
         };
     }
 
-    public Terms buildTerms(String segmentName)
-    {
+    public Terms buildTerms(String segmentName) {
         SegmentReader segmentReader = segmentReaders.getOrDefault(segmentName, null);
-        if (segmentReader == null)
-        {
+        if (segmentReader == null) {
             return null;
         }
 
         // TODO: Write logic for getting the terms for a segment
 
-
-
         return null;
     }
 
 
-    public Terms buildNewFilterTerms(String segmentName, IndexSearcher segmentSearcher)
-    {
-
-        return null;
+    public Terms buildNewFilterTerms(String segmentName, IndexSearcher segmentSearcher) {
+        return new SegmentTerms(segmentSearcher);
     }
 
-    private class StoredFilterTerms extends Terms
-    {
+    public RoaringDocIdSet getDocIdSetForFilterAndSearcher(Query filter, IndexSearcher segmentSearcher) throws IOException {
+        IndexReaderContext readerContext = segmentSearcher.getTopReaderContext();
+        RoaringDocIdSet.Builder docIdSetBuilder = new RoaringDocIdSet.Builder(maxDoc);
 
-        @Override
-        public TermsEnum iterator() throws IOException {
-            return new StoredFilterTermsEnum();
-        }
-
-        @Override
-        public long size() throws IOException {
-            return filters.size();
-        }
-
-        @Override
-        public long getSumTotalTermFreq() throws IOException {
-            return -1;
-        }
-
-        @Override
-        public long getSumDocFreq() throws IOException {
-            return -1;
-        }
-
-        @Override
-        public int getDocCount() throws IOException {
-            return -1;
-        }
-
-        @Override
-        public boolean hasFreqs() {
-            return false;
-        }
-
-        @Override
-        public boolean hasOffsets() {
-            return false;
-        }
-
-        @Override
-        public boolean hasPositions() {
-            return false;
-        }
-
-        @Override
-        public boolean hasPayloads() {
-            return false;
-        }
-    }
-
-    private class StoredFilterTermsEnum extends  TermsEnum
-    {
-        @Override
-        public SeekStatus seekCeil(BytesRef text) throws IOException {
-            return null;
-        }
-
-        @Override
-        public void seekExact(long ord) throws IOException {
-
-        }
-
-        @Override
-        public BytesRef term() throws IOException {
-            return null;
-        }
-
-        @Override
-        public long ord() throws IOException {
-            return 0;
-        }
-
-        @Override
-        public int docFreq() throws IOException {
-            return 0;
-        }
-
-        @Override
-        public long totalTermFreq() throws IOException {
-            return 0;
-        }
-
-        @Override
-        public PostingsEnum postings(PostingsEnum reuse, int flags) throws IOException {
-            return null;
-        }
-
-        @Override
-        public BytesRef next() throws IOException {
-            return null;
-        }
-    }
-
-
-
-    public Fields build() throws IOException {
-
-        int maxDoc = 0;
-        for (LeafReaderContext context : searcher.getIndexReader().leaves()) {
-            SegmentReader reader = segmentReader(context.reader());
-            maxDoc = Math.max(maxDoc, reader.maxDoc());
-        }
-
-        Map<String, RoaringDocIdSet.Builder> segmentDocs = new HashMap<>();
-        searcher.search(filter, new Collector() {
+        segmentSearcher.search(filter, new Collector() {
             @Override
             public LeafCollector getLeafCollector(LeafReaderContext context) throws IOException {
-                SegmentReader reader = segmentReader(context.reader());
+                if (context != readerContext) {
+                    return null;
+                }
 
-                RoaringDocIdSet.Builder docIdSetBuilder = new RoaringDocIdSet.Builder(reader.maxDoc());
-                segmentDocs.put(reader.getSegmentName(), docIdSetBuilder);
 
                 return new LeafCollector() {
                     @Override
                     public void setScorer(Scorer scorer) throws IOException {
-
                     }
 
                     @Override
@@ -320,33 +206,7 @@ public class StoredFilterFieldsBuilder {
             }
         });
 
-        for (String segment : segmentDocs.keySet())
-        {
-            Terms segmentTerm = createSegmentTerm(segmentDocs.get(segment));
-            segmentTerms.put(segment, segmentTerm);
-        }
-
-        return new Fields() {
-            @Override
-            public Iterator<String> iterator() {
-                return segmentTerms.keySet().iterator();
-            }
-
-            @Override
-            public Terms terms(String field) throws IOException {
-                return segmentTerms.getOrDefault(field, null);
-            }
-
-            @Override
-            public int size() {
-                return segmentTerms.size();
-            }
-        };
-    }
-
-    private Terms createSegmentTerm(RoaringDocIdSet.Builder builder) {
-        RoaringDocIdSet segmentDocs = builder.build();
-        return new SegmentTerms(segmentDocs);
+        return docIdSetBuilder.build();
     }
 
     /**
@@ -366,13 +226,11 @@ public class StoredFilterFieldsBuilder {
 
     private class SegmentTerms extends Terms {
 
-        private final RoaringDocIdSet segmentDocs;
-        private final int docCount;
+        private IndexSearcher segmentSearcher;
 
-        public SegmentTerms(RoaringDocIdSet segmentDocs)
+        public SegmentTerms(IndexSearcher segmentSearcher)
         {
-            this.segmentDocs = segmentDocs;
-            this.docCount = segmentDocs.cardinality();
+            this.segmentSearcher = segmentSearcher;
         }
 
         @Override
@@ -391,9 +249,25 @@ public class StoredFilterFieldsBuilder {
                     TermsEnum.EMPTY.seekExact(ord);
                 }
 
+                private FilterData filterData()
+                {
+                    if (pos >= 0 && pos <= filters.size())
+                    {
+                        return filters.get(pos);
+                    }
+
+                    return null;
+                }
+
+
                 @Override
                 public BytesRef term() throws IOException {
-                    return pos == 0 ? filterName : null;
+                    FilterData filterData = filterData();
+                    if (filterData == null) {
+                        return null;
+                    }
+
+                    return filterData.nameBytes;
                 }
 
                 @Override
@@ -403,7 +277,7 @@ public class StoredFilterFieldsBuilder {
 
                 @Override
                 public int docFreq() throws IOException {
-                    return pos == 0 ? docCount : TermsEnum.EMPTY.docFreq();
+                    return -1;
                 }
 
                 @Override
@@ -419,11 +293,12 @@ public class StoredFilterFieldsBuilder {
 
                 @Override
                 public PostingsEnum postings(PostingsEnum reuse, int flags) throws IOException {
-                    if (pos == 0) {
-                        return TermsEnum.EMPTY.postings(reuse, flags);
+                    FilterData filterData = filterData();
+                    if (filterData == null) {
+                        return null;
                     }
 
-                    final DocIdSetIterator segmentDocsIter = SegmentTerms.this.segmentDocs.iterator();
+                    final DocIdSetIterator segmentDocsIter = getDocIdSetForFilterAndSearcher(filterData.query, segmentSearcher).iterator();
 
                     return new PostingsEnum() {
 
@@ -478,7 +353,7 @@ public class StoredFilterFieldsBuilder {
 
         @Override
         public long size() throws IOException {
-            return 1;
+            return filters.size();
         }
 
         @Override
@@ -493,7 +368,7 @@ public class StoredFilterFieldsBuilder {
 
         @Override
         public int getDocCount() throws IOException {
-            return docCount;
+            return maxDoc;
         }
 
         @Override

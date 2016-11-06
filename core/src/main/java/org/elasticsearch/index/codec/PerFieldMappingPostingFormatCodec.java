@@ -26,10 +26,7 @@ import org.apache.lucene.codecs.FieldsProducer;
 import org.apache.lucene.codecs.PostingsFormat;
 import org.apache.lucene.codecs.lucene50.Lucene50StoredFieldsFormat;
 import org.apache.lucene.codecs.lucene62.Lucene62Codec;
-import org.apache.lucene.index.Fields;
-import org.apache.lucene.index.SegmentReadState;
-import org.apache.lucene.index.SegmentWriteState;
-import org.apache.lucene.index.Terms;
+import org.apache.lucene.index.*;
 import org.apache.lucene.util.IOUtils;
 import org.elasticsearch.common.lucene.Lucene;
 import org.elasticsearch.index.mapper.CompletionFieldMapper;
@@ -41,6 +38,8 @@ import static org.apache.lucene.index.FilterLeafReader.FilterFields;
 
 import java.io.Closeable;
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * {@link PerFieldMappingPostingFormatCodec This postings format} is the default
@@ -121,8 +120,44 @@ public class PerFieldMappingPostingFormatCodec extends Lucene62Codec {
             this.state = state;
         }
 
+        /** Copied from base implementation. This added additional fields/terms to the leaf field producers */
+        @Override
+        public void merge(MergeState mergeState) throws IOException {
+            // TODO: Get data and decide on whether to augment
+            boolean shouldAugment = false;
+
+            if (shouldAugment) {
+                final List<Fields> fields = new ArrayList<>();
+                final List<ReaderSlice> slices = new ArrayList<>();
+
+                int docBase = 0;
+
+                for (int readerIndex = 0; readerIndex < mergeState.fieldsProducers.length; readerIndex++) {
+                    final FieldsProducer f = mergeState.fieldsProducers[readerIndex];
+
+                    final int maxDoc = mergeState.maxDocs[readerIndex];
+                    f.checkIntegrity();
+                    slices.add(new ReaderSlice(docBase, maxDoc, readerIndex));
+
+                    // TODO: Create merged field here.
+                    fields.add(f);
+                    docBase += maxDoc;
+                }
+
+                Fields mergedFields = new MappedMultiFields(mergeState,
+                    new MultiFields(fields.toArray(Fields.EMPTY_ARRAY),
+                        slices.toArray(ReaderSlice.EMPTY_ARRAY)));
+                write(mergedFields);
+            }
+            else {
+                super.merge(mergeState);
+            }
+        }
+
         @Override
         public void write(Fields fields) throws IOException {
+            // Add or extend stored filter field
+
             CloseableFields allFields = new CloseableFields(fields) {
                 Closeable closableTerms;
 

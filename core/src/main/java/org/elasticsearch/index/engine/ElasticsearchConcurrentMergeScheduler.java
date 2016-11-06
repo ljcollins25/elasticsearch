@@ -66,6 +66,7 @@ class ElasticsearchConcurrentMergeScheduler extends ConcurrentMergeScheduler {
     private final Set<OnGoingMerge> onGoingMerges = ConcurrentCollections.newConcurrentSet();
     private final Set<OnGoingMerge> readOnlyOnGoingMerges = Collections.unmodifiableSet(onGoingMerges);
     private final MergeSchedulerConfig config;
+    private final Object flushMergesLock = new Object();
 
     public ElasticsearchConcurrentMergeScheduler(ShardId shardId, IndexSettings indexSettings) {
         this.config = indexSettings.getMergeSchedulerConfig();

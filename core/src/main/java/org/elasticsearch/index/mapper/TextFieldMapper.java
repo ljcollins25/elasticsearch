@@ -233,7 +233,6 @@ public class TextFieldMapper extends FieldMapper {
         private double fielddataMaxFrequency;
         private int fielddataMinSegmentSize;
         private boolean usePrefix;
-        private AutoPrefixPostingsFormat prefixPostingsFormat;
 
         public TextFieldType() {
             setTokenized(true);
@@ -269,17 +268,6 @@ public class TextFieldMapper extends FieldMapper {
                     && fielddataMinSegmentSize == that.fielddataMinSegmentSize
                     && usePrefix == that.usePrefix;
         }
-
-/*        @Override
-        public synchronized PostingsFormat fieldPostingsFormat() {
-            if (usePrefix) {
-                if (prefixPostingsFormat == null) {
-                    prefixPostingsFormat = new AutoPrefixPostingsFormat();
-                }
-                return prefixPostingsFormat;
-            }
-            return super.fieldPostingsFormat();
-        }*/
 
         @Override
         public Query termQuery(Object value, QueryShardContext context) {
