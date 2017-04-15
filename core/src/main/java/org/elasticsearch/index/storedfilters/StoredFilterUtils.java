@@ -86,38 +86,4 @@ public class StoredFilterUtils {
 
         return docsBySegmentMap;
     }
-
-    public static RoaringDocIdSet getDocIdSetForFilterAndSearcher(Query filter, IndexSearcher segmentSearcher) throws IOException {
-        IndexReaderContext readerContext = segmentSearcher.getTopReaderContext();
-        RoaringDocIdSet.Builder docIdSetBuilder = new RoaringDocIdSet.Builder(segmentSearcher.getIndexReader().maxDoc());
-
-        segmentSearcher.search(filter, new Collector() {
-            @Override
-            public LeafCollector getLeafCollector(LeafReaderContext context) throws IOException {
-                if (context != readerContext) {
-                    return null;
-                }
-
-
-                return new LeafCollector() {
-                    @Override
-                    public void setScorer(Scorer scorer) throws IOException {
-                    }
-
-                    @Override
-                    public void collect(int doc) throws IOException {
-                        docIdSetBuilder.add(doc);
-                    }
-                };
-            }
-
-            @Override
-            public boolean needsScores() {
-                return false;
-            }
-        });
-
-        return docIdSetBuilder.build();
-    }
-
 }
