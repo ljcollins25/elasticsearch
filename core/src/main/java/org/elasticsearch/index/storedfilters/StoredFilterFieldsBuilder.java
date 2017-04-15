@@ -213,7 +213,7 @@ public class StoredFilterFieldsBuilder {
      * Tries to extract a segment reader from the given index reader.
      * If no SegmentReader can be extracted an {@link IllegalStateException} is thrown.
      */
-    protected static SegmentReader segmentReader(LeafReader reader) {
+    public static SegmentReader segmentReader(LeafReader reader) {
         if (reader instanceof SegmentReader) {
             return (SegmentReader) reader;
         } else if (reader instanceof FilterLeafReader) {

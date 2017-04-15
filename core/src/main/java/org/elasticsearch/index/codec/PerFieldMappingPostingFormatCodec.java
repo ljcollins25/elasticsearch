@@ -33,6 +33,7 @@ import org.elasticsearch.index.mapper.CompletionFieldMapper;
 import org.elasticsearch.index.mapper.CompletionFieldMapper2x;
 import org.elasticsearch.index.mapper.MappedFieldType;
 import org.elasticsearch.index.mapper.MapperService;
+import org.elasticsearch.index.storedfilters.StoredFilterManager;
 
 import static org.apache.lucene.index.FilterLeafReader.FilterFields;
 
@@ -106,6 +107,7 @@ public class PerFieldMappingPostingFormatCodec extends Lucene62Codec {
 
         @Override
         public FieldsProducer fieldsProducer(SegmentReadState state) throws IOException {
+
             return delegate.fieldsProducer(state);
         }
     }
@@ -139,6 +141,9 @@ public class PerFieldMappingPostingFormatCodec extends Lucene62Codec {
                     f.checkIntegrity();
                     slices.add(new ReaderSlice(docBase, maxDoc, readerIndex));
 
+                    // TODO: Don't create merged field here. I think it should be done when we
+                    // create the reader for merge. During search time, the stored filter query handles
+                    // searching fields
                     // TODO: Create merged field here.
                     fields.add(f);
                     docBase += maxDoc;

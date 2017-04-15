@@ -5,6 +5,7 @@ import org.apache.lucene.search.*;
 import org.apache.lucene.util.BytesRef;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -12,22 +13,27 @@ import java.util.Map;
 /**
  * Created by lancec on 11/5/2016.
  */
-public class FilterDataFields extends Fields {
-    private Map<String, StoredFilterData> filterDataMap;
+public class StoredFilterDataFields extends Fields {
     private List<StoredFilterData> storedFilterDatas;
+
+    // This list only contains a single element for StoredFilterUtils.STORED_FILTER_TERM_FIELD_NAME
+    // It is only here to provide an iterator to pass out for iterator()
     private List<String> filterFieldName;
     private LeafReader reader;
     private IndexSearcher leafSearcher;
 
-    // TODO: Add constructor
     // TODO: Call this during merge by replacing fields (ie FieldsProducer) for segment with a multi field including this
     // TODO: Should the doc id set be cached between instances? No. A segment should only be merging in one place a time.
     // TODO: Track which segments have filter data written so that data isn't serialized into _stored_filter_docs stored field
-    // Two new fields:
-    // _stored_filter (terms are filter names)
-    // IndexOptions.DOCS (not stored)
-    // _stored_filter_docs (no terms) - per segment document?
-    // IndexOptions.NONE (stored)
+
+    public StoredFilterDataFields(LeafReader reader, List<StoredFilterData> storedFilterDatas)
+    {
+        filterFieldName = new ArrayList<>();
+        filterFieldName.add(StoredFilterUtils.STORED_FILTER_TERM_FIELD_NAME);
+        this.storedFilterDatas = storedFilterDatas;
+        this.reader = reader;
+        this.leafSearcher = new IndexSearcher(reader);
+    }
 
     public RoaringDocIdSet getFilterDocs(Query filter) throws IOException {
         IndexReaderContext readerContext = leafSearcher.getTopReaderContext();
@@ -68,17 +74,12 @@ public class FilterDataFields extends Fields {
 
     @Override
     public Terms terms(String field) throws IOException {
-        if (field != filterFieldName.get(0))
+        if (field != StoredFilterUtils.STORED_FILTER_TERM_FIELD_NAME)
         {
             return null;
         }
 
-        StoredFilterData storedFilterData = filterDataMap.getOrDefault(field, null);
-        if (storedFilterData == null){
-            return null;
-        }
-
-        return null;
+        return new FilterDataTerms();
     }
 
     @Override
@@ -146,17 +147,20 @@ public class FilterDataFields extends Fields {
         @Override
         public BytesRef next() throws IOException {
             ord++;
+            updateCurrent();
+            return term();
+        }
+
+        private void updateCurrent()
+        {
             if (ord < storedFilterDatas.size())
             {
                 current = storedFilterDatas.get(ord);
-                return current.filterNameBytes;
             }
             else
             {
                 current = null;
             }
-
-            return null;
         }
 
         @Override
@@ -167,11 +171,13 @@ public class FilterDataFields extends Fields {
         @Override
         public void seekExact(long ord) throws IOException {
             this.ord = (int)ord;
+            updateCurrent();
         }
 
         @Override
         public BytesRef term() throws IOException {
-            return null;
+            if (current == null) return null;
+            else return current.filterNameBytes;
         }
 
         @Override

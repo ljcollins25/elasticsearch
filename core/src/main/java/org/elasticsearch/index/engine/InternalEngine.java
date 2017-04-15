@@ -64,6 +64,7 @@ import org.elasticsearch.index.shard.DocsStats;
 import org.elasticsearch.index.shard.ElasticsearchMergePolicy;
 import org.elasticsearch.index.shard.ShardId;
 import org.elasticsearch.index.shard.TranslogRecoveryPerformer;
+import org.elasticsearch.index.storedfilters.StoredFilterManager;
 import org.elasticsearch.index.translog.Translog;
 import org.elasticsearch.index.translog.TranslogConfig;
 import org.elasticsearch.index.translog.TranslogCorruptedException;
@@ -114,6 +115,8 @@ public class InternalEngine extends Engine {
 
     private final IndexThrottle throttle;
 
+    private StoredFilterManager storedFilterManager;
+
     // How many callers are currently requesting index throttling.  Currently there are only two situations where we do this: when merges
     // are falling behind and when writing indexing buffer to disk is too slow.  When this is 0, there is no throttling, else we throttling
     // incoming indexing ops to a single thread:
@@ -147,6 +150,7 @@ public class InternalEngine extends Engine {
             this.searcherFactory = new SearchFactory(logger, isClosed, engineConfig);
             try {
                 writer = createWriter(openMode == EngineConfig.OpenMode.CREATE_INDEX_AND_TRANSLOG);
+                storedFilterManager = new StoredFilterManager(writer, this);
                 indexWriter = writer;
                 translog = openTranslog(engineConfig, writer);
                 assert translog.getGeneration() != null;
@@ -1185,6 +1189,7 @@ public class InternalEngine extends Engine {
 
         @Override
         public synchronized void beforeMerge(OnGoingMerge merge) {
+            storedFilterManager.mergeStarted(merge);
             int maxNumMerges = mergeScheduler.getMaxMergeCount();
             if (numMergesInFlight.incrementAndGet() > maxNumMerges) {
                 if (isThrottling.getAndSet(true) == false) {
@@ -1196,6 +1201,7 @@ public class InternalEngine extends Engine {
 
         @Override
         public synchronized void afterMerge(OnGoingMerge merge) {
+            storedFilterManager.mergeCompleted(merge);
             int maxNumMerges = mergeScheduler.getMaxMergeCount();
             if (numMergesInFlight.decrementAndGet() < maxNumMerges) {
                 if (isThrottling.getAndSet(false)) {

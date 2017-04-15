@@ -72,7 +72,10 @@ public class AutoPrefixQuery extends Query {
             this.searcher = searcher;
         }
 
-        protected Scorer getScorer(LeafReaderContext context, Terms prefixTerms) throws IOException {
+        @Override
+        public Scorer scorer(LeafReaderContext context) throws IOException {
+            Terms prefixTerms = context.reader().terms(prefix.field());
+
             TermsEnum prefixEnum = prefixTerms.iterator();
             TermsEnum.SeekStatus status = prefixEnum.seekCeil(prefix.bytes());
             if (status == TermsEnum.SeekStatus.FOUND) {
@@ -87,12 +90,6 @@ public class AutoPrefixQuery extends Query {
 
             // No match
             return null;
-        }
-
-        @Override
-        public Scorer scorer(LeafReaderContext context) throws IOException {
-            Terms terms = context.reader().terms(prefix.field());
-            return getScorer(context, terms);
         }
     }
 }
