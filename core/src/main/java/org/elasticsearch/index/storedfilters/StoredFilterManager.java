@@ -203,7 +203,6 @@ public class StoredFilterManager {
         return new StoredFilterMerge(merge);
     }
 
-
     public void mergeStarted(OnGoingMerge onGoingMerge) {
         mergeToIndexMap.put(onGoingMerge, nextMergeIndex.getAndIncrement());
         updateMaxOutstandingMergeId();
@@ -236,7 +235,7 @@ public class StoredFilterManager {
 
         @Override
         public FieldsProducer getPostingsReader() {
-            FieldsProducer postingsReader = getPostingsReader();
+            FieldsProducer postingsReader = super.getPostingsReader();
             if (filterDataMap.size() == 0)
             {
                 return postingsReader;
@@ -245,13 +244,21 @@ public class StoredFilterManager {
 
             List<Fields> fields = new ArrayList<>();
             fields.add(postingsReader);
+            List<StoredFilterData> storedFilterDatas = new ArrayList<>();
 
             for (StoredFilterData filterData : filterDataMap.values()) {
-                // TODO: Add
-                fields.add(new StoredFilterDataFields());
+                storedFilterDatas.add(filterData);
             }
 
-            return super.getPostingsReader();
+            if (storedFilterDatas.size() == 0)
+            {
+                return postingsReader;
+            }
+
+            // Add store filter datas
+            fields.add(new StoredFilterDataFields(this.in, storedFilterDatas));
+
+            return new ParallelFieldsProducer(postingsReader, fields, in.maxDoc());
         }
     }
 }

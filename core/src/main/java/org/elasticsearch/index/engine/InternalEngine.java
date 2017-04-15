@@ -1188,6 +1188,12 @@ public class InternalEngine extends Engine {
         }
 
         @Override
+        protected void doMerge(IndexWriter writer, MergePolicy.OneMerge merge) throws IOException {
+            merge = storedFilterManager.wrapMerge(merge);
+            super.doMerge(writer, merge);
+        }
+
+        @Override
         public synchronized void beforeMerge(OnGoingMerge merge) {
             storedFilterManager.mergeStarted(merge);
             int maxNumMerges = mergeScheduler.getMaxMergeCount();

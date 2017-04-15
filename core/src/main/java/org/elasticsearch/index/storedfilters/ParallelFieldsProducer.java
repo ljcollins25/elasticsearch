@@ -41,7 +41,7 @@ public class ParallelFieldsProducer extends FieldsProducer {
 
     @Override
     public void checkIntegrity() throws IOException {
-        delegateFieldsProducer.close();
+        delegateFieldsProducer.checkIntegrity();
     }
 
     @Override

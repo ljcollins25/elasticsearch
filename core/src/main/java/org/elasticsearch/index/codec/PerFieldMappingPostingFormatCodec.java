@@ -122,43 +122,6 @@ public class PerFieldMappingPostingFormatCodec extends Lucene62Codec {
             this.state = state;
         }
 
-        /** Copied from base implementation. This added additional fields/terms to the leaf field producers */
-        @Override
-        public void merge(MergeState mergeState) throws IOException {
-            // TODO: Get data and decide on whether to augment
-            boolean shouldAugment = false;
-
-            if (shouldAugment) {
-                final List<Fields> fields = new ArrayList<>();
-                final List<ReaderSlice> slices = new ArrayList<>();
-
-                int docBase = 0;
-
-                for (int readerIndex = 0; readerIndex < mergeState.fieldsProducers.length; readerIndex++) {
-                    final FieldsProducer f = mergeState.fieldsProducers[readerIndex];
-
-                    final int maxDoc = mergeState.maxDocs[readerIndex];
-                    f.checkIntegrity();
-                    slices.add(new ReaderSlice(docBase, maxDoc, readerIndex));
-
-                    // TODO: Don't create merged field here. I think it should be done when we
-                    // create the reader for merge. During search time, the stored filter query handles
-                    // searching fields
-                    // TODO: Create merged field here.
-                    fields.add(f);
-                    docBase += maxDoc;
-                }
-
-                Fields mergedFields = new MappedMultiFields(mergeState,
-                    new MultiFields(fields.toArray(Fields.EMPTY_ARRAY),
-                        slices.toArray(ReaderSlice.EMPTY_ARRAY)));
-                write(mergedFields);
-            }
-            else {
-                super.merge(mergeState);
-            }
-        }
-
         @Override
         public void write(Fields fields) throws IOException {
             // Add or extend stored filter field

@@ -8,19 +8,20 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
-import java.util.Map;
 
 /**
  * Created by lancec on 11/5/2016.
  */
 public class StoredFilterDataFields extends Fields {
-    private List<StoredFilterData> storedFilterDatas;
+
+    private final static StoredFilterData[] EMPTY_ARRAY = new StoredFilterData[0];
 
     // This list only contains a single element for StoredFilterUtils.STORED_FILTER_TERM_FIELD_NAME
     // It is only here to provide an iterator to pass out for iterator()
     private List<String> filterFieldName;
     private LeafReader reader;
     private IndexSearcher leafSearcher;
+    private StoredFilterData[] storedFilterDatas;
 
     // TODO: Call this during merge by replacing fields (ie FieldsProducer) for segment with a multi field including this
     // TODO: Should the doc id set be cached between instances? No. A segment should only be merging in one place a time.
@@ -30,7 +31,8 @@ public class StoredFilterDataFields extends Fields {
     {
         filterFieldName = new ArrayList<>();
         filterFieldName.add(StoredFilterUtils.STORED_FILTER_TERM_FIELD_NAME);
-        this.storedFilterDatas = storedFilterDatas;
+        storedFilterDatas.sort((o1, o2) -> o1.filterNameBytes.compareTo(o2.filterNameBytes));
+        this.storedFilterDatas = storedFilterDatas.toArray(EMPTY_ARRAY);
         this.reader = reader;
         this.leafSearcher = new IndexSearcher(reader);
     }
@@ -96,7 +98,7 @@ public class StoredFilterDataFields extends Fields {
 
         @Override
         public long size() throws IOException {
-            return storedFilterDatas.size();
+            return storedFilterDatas.length;
         }
 
         @Override
@@ -136,7 +138,7 @@ public class StoredFilterDataFields extends Fields {
     }
 
     private class FilterDataTermsEnum extends TermsEnum {
-        private int ord = -1;
+        private int currentTermOrd = -1;
         private StoredFilterData current;
 
         @Override
@@ -146,16 +148,16 @@ public class StoredFilterDataFields extends Fields {
 
         @Override
         public BytesRef next() throws IOException {
-            ord++;
+            currentTermOrd++;
             updateCurrent();
             return term();
         }
 
         private void updateCurrent()
         {
-            if (ord < storedFilterDatas.size())
+            if (currentTermOrd < storedFilterDatas.length)
             {
-                current = storedFilterDatas.get(ord);
+                current = storedFilterDatas[currentTermOrd];
             }
             else
             {
@@ -163,14 +165,84 @@ public class StoredFilterDataFields extends Fields {
             }
         }
 
+        // Seek methods copied (with some minor changes_ from DirectPostingsFormat
+        // If non-negative, exact match; else, -currentTermOrd-1, where currentTermOrd
+        // is where you would insert the term.
+        private int findTerm(BytesRef term) {
+
+            // Just do binary search: should be (constant factor)
+            // faster than using the skip list:
+            int low = 0;
+            int high = storedFilterDatas.length-1;
+
+            while (low <= high) {
+                int mid = (low + high) >>> 1;
+                int cmp = compare(mid, term);
+                if (cmp < 0) {
+                    low = mid + 1;
+                } else if (cmp > 0) {
+                    high = mid - 1;
+                } else {
+                    return mid; // key found
+                }
+            }
+
+            return -(low + 1);  // key not found.
+        }
+
+        // Compares in unicode (UTF8) order:
+        int compare(int ord, BytesRef other) {
+            final byte[] otherBytes = other.bytes;
+
+            StoredFilterData storedFilterData = storedFilterDatas[ord];
+            BytesRef termBytes = storedFilterData.filterNameBytes;
+            int upto = termBytes.offset;
+            final int termLen = termBytes.length;
+            int otherUpto = other.offset;
+
+            final int stop = upto + Math.min(termLen, other.length);
+            while (upto < stop) {
+                int diff = (termBytes.bytes[upto++] & 0xFF) - (otherBytes[otherUpto++] & 0xFF);
+                if (diff != 0) {
+                    return diff;
+                }
+            }
+
+            // One is a prefix of the other, or, they are equal:
+            return termLen - other.length;
+        }
+
         @Override
-        public SeekStatus seekCeil(BytesRef text) throws IOException {
-            return SeekStatus.NOT_FOUND;
+        public SeekStatus seekCeil(BytesRef term) {
+            final int ord = findTerm(term);
+            if (ord >= 0) {
+                currentTermOrd = ord;
+                updateCurrent();
+                return SeekStatus.FOUND;
+            } else if (ord == -storedFilterDatas.length-1) {
+                return SeekStatus.END;
+            } else {
+                currentTermOrd = -ord - 1;
+                updateCurrent();
+                return SeekStatus.NOT_FOUND;
+            }
+        }
+
+        @Override
+        public boolean seekExact(BytesRef term) {
+            final int ord = findTerm(term);
+            if (ord >= 0) {
+                currentTermOrd = ord;
+                updateCurrent();
+                return true;
+            } else {
+                return false;
+            }
         }
 
         @Override
         public void seekExact(long ord) throws IOException {
-            this.ord = (int)ord;
+            this.currentTermOrd = (int)ord;
             updateCurrent();
         }
 
@@ -182,7 +254,7 @@ public class StoredFilterDataFields extends Fields {
 
         @Override
         public long ord() throws IOException {
-            return ord;
+            return currentTermOrd;
         }
 
         @Override
