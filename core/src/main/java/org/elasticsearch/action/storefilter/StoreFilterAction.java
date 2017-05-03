@@ -17,22 +17,27 @@
  * under the License.
  */
 
-package org.elasticsearch.action.refresh;
+package org.elasticsearch.action.storefilter;
 
-import org.elasticsearch.action.support.broadcast.BroadcastRequest;
+import org.elasticsearch.action.Action;
+import org.elasticsearch.client.ElasticsearchClient;
 
-/**
- * A refresh request making all operations performed since the last refresh available for search. The (near) real-time
- * capabilities depends on the index engine used. For example, the internal one requires refresh to be called, but by
- * default a refresh is scheduled periodically.
- *
- * @see org.elasticsearch.client.Requests#refreshRequest(String...)
- * @see org.elasticsearch.client.IndicesAdminClient#refresh(RefreshRequest)
- * @see RefreshResponse
- */
-public class RefreshRequest extends BroadcastRequest<RefreshRequest> {
+public class StoreFilterAction extends Action<StoreFilterRequest, StoreFilterResponse, StoreFilterRequestBuilder> {
 
-    public RefreshRequest(String... indices) {
-        super(indices);
+    public static final StoreFilterAction INSTANCE = new StoreFilterAction();
+    public static final String NAME = "indices:admin/storefilter";
+
+    private StoreFilterAction() {
+        super(NAME);
+    }
+
+    @Override
+    public StoreFilterResponse newResponse() {
+        return new StoreFilterResponse();
+    }
+
+    @Override
+    public StoreFilterRequestBuilder newRequestBuilder(ElasticsearchClient client) {
+        return new StoreFilterRequestBuilder(client, this);
     }
 }

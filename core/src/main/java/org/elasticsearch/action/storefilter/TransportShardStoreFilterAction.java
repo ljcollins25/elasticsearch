@@ -17,7 +17,7 @@
  * under the License.
  */
 
-package org.elasticsearch.action.refresh;
+package org.elasticsearch.action.storefilter;
 
 import org.elasticsearch.action.support.ActionFilters;
 import org.elasticsearch.action.support.replication.BasicReplicationRequest;
@@ -36,13 +36,13 @@ import org.elasticsearch.threadpool.ThreadPool;
 import org.elasticsearch.transport.TransportService;
 
 
-public class TransportShardRefreshAction
+public class TransportShardStoreFilterAction
         extends TransportReplicationAction<BasicReplicationRequest, BasicReplicationRequest, ReplicationResponse> {
 
-    public static final String NAME = RefreshAction.NAME + "[s]";
+    public static final String NAME = StoreFilterAction.NAME + "[s]";
 
     @Inject
-    public TransportShardRefreshAction(Settings settings, TransportService transportService, ClusterService clusterService,
+    public TransportShardStoreFilterAction(Settings settings, TransportService transportService, ClusterService clusterService,
                                        IndicesService indicesService, ThreadPool threadPool, ShardStateAction shardStateAction,
                                        ActionFilters actionFilters, IndexNameExpressionResolver indexNameExpressionResolver) {
         super(settings, NAME, transportService, clusterService, indicesService, threadPool, shardStateAction, actionFilters,
@@ -58,7 +58,7 @@ public class TransportShardRefreshAction
     protected PrimaryResult shardOperationOnPrimary(BasicReplicationRequest shardRequest) {
         IndexShard indexShard = indicesService.indexServiceSafe(shardRequest.shardId().getIndex()).getShard(shardRequest.shardId().id());
         indexShard.refresh("api");
-        logger.trace("{} refresh request executed on primary", indexShard.shardId());
+        logger.trace("{} storefilter request executed on primary", indexShard.shardId());
         return new PrimaryResult(shardRequest, new ReplicationResponse());
     }
 
@@ -67,7 +67,7 @@ public class TransportShardRefreshAction
         final ShardId shardId = request.shardId();
         IndexShard indexShard = indicesService.indexServiceSafe(shardId.getIndex()).getShard(shardId.id());
         indexShard.refresh("api");
-        logger.trace("{} refresh request executed on replica", indexShard.shardId());
+        logger.trace("{} storefilter request executed on replica", indexShard.shardId());
         return new ReplicaResult();
     }
 

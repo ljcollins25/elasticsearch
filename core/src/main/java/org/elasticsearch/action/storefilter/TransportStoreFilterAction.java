@@ -17,7 +17,7 @@
  * under the License.
  */
 
-package org.elasticsearch.action.refresh;
+package org.elasticsearch.action.storefilter;
 
 import org.elasticsearch.action.ShardOperationFailedException;
 import org.elasticsearch.action.support.ActionFilters;
@@ -36,16 +36,16 @@ import org.elasticsearch.transport.TransportService;
 import java.util.List;
 
 /**
- * Refresh action.
+ * StoreFilter action.
  */
-public class TransportRefreshAction extends TransportBroadcastReplicationAction<RefreshRequest, RefreshResponse, BasicReplicationRequest, ReplicationResponse> {
+public class TransportStoreFilterAction extends TransportBroadcastReplicationAction<StoreFilterRequest, StoreFilterResponse, BasicReplicationRequest, ReplicationResponse> {
 
     @Inject
-    public TransportRefreshAction(Settings settings, ThreadPool threadPool, ClusterService clusterService,
+    public TransportStoreFilterAction(Settings settings, ThreadPool threadPool, ClusterService clusterService,
                                   TransportService transportService, ActionFilters actionFilters,
                                   IndexNameExpressionResolver indexNameExpressionResolver,
-                                  TransportShardRefreshAction shardRefreshAction) {
-        super(RefreshAction.NAME, RefreshRequest::new, settings, threadPool, clusterService, transportService, actionFilters, indexNameExpressionResolver, shardRefreshAction);
+                                  TransportShardStoreFilterAction shardStoreFilterAction) {
+        super(StoreFilterAction.NAME, StoreFilterRequest::new, settings, threadPool, clusterService, transportService, actionFilters, indexNameExpressionResolver, shardStoreFilterAction);
     }
 
     @Override
@@ -54,14 +54,14 @@ public class TransportRefreshAction extends TransportBroadcastReplicationAction<
     }
 
     @Override
-    protected BasicReplicationRequest newShardRequest(RefreshRequest request, ShardId shardId) {
+    protected BasicReplicationRequest newShardRequest(StoreFilterRequest request, ShardId shardId) {
         BasicReplicationRequest replicationRequest = new BasicReplicationRequest(shardId);
         replicationRequest.waitForActiveShards(ActiveShardCount.NONE);
         return replicationRequest;
     }
 
     @Override
-    protected RefreshResponse newResponse(int successfulShards, int failedShards, int totalNumCopies, List<ShardOperationFailedException> shardFailures) {
-        return new RefreshResponse(totalNumCopies, successfulShards, failedShards, shardFailures);
+    protected StoreFilterResponse newResponse(int successfulShards, int failedShards, int totalNumCopies, List<ShardOperationFailedException> shardFailures) {
+        return new StoreFilterResponse(totalNumCopies, successfulShards, failedShards, shardFailures);
     }
 }

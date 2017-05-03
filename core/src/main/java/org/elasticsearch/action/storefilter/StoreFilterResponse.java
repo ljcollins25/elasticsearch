@@ -17,27 +17,22 @@
  * under the License.
  */
 
-package org.elasticsearch.action.refresh;
+package org.elasticsearch.action.storefilter;
 
-import org.elasticsearch.action.Action;
-import org.elasticsearch.client.ElasticsearchClient;
+import org.elasticsearch.action.ShardOperationFailedException;
+import org.elasticsearch.action.support.broadcast.BroadcastResponse;
 
-public class RefreshAction extends Action<RefreshRequest, RefreshResponse, RefreshRequestBuilder> {
+import java.util.List;
 
-    public static final RefreshAction INSTANCE = new RefreshAction();
-    public static final String NAME = "indices:admin/refresh";
+/**
+ * The response of a storefilter action.
+ */
+public class StoreFilterResponse extends BroadcastResponse {
 
-    private RefreshAction() {
-        super(NAME);
+    StoreFilterResponse() {
     }
 
-    @Override
-    public RefreshResponse newResponse() {
-        return new RefreshResponse();
-    }
-
-    @Override
-    public RefreshRequestBuilder newRequestBuilder(ElasticsearchClient client) {
-        return new RefreshRequestBuilder(client, this);
+    StoreFilterResponse(int totalShards, int successfulShards, int failedShards, List<ShardOperationFailedException> shardFailures) {
+        super(totalShards, successfulShards, failedShards, shardFailures);
     }
 }

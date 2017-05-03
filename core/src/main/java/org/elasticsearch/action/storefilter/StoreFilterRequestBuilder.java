@@ -17,22 +17,19 @@
  * under the License.
  */
 
-package org.elasticsearch.action.refresh;
+package org.elasticsearch.action.storefilter;
 
-import org.elasticsearch.action.ShardOperationFailedException;
-import org.elasticsearch.action.support.broadcast.BroadcastResponse;
-
-import java.util.List;
+import org.elasticsearch.action.support.broadcast.BroadcastOperationRequestBuilder;
+import org.elasticsearch.client.ElasticsearchClient;
 
 /**
- * The response of a refresh action.
+ * A storefilter request making all operations performed since the last storefilter available for search. The (near) real-time
+ * capabilities depends on the index engine used. For example, the internal one requires storefilter to be called, but by
+ * default a storefilter is scheduled periodically.
  */
-public class RefreshResponse extends BroadcastResponse {
+public class StoreFilterRequestBuilder extends BroadcastOperationRequestBuilder<StoreFilterRequest, StoreFilterResponse, StoreFilterRequestBuilder> {
 
-    RefreshResponse() {
-    }
-
-    RefreshResponse(int totalShards, int successfulShards, int failedShards, List<ShardOperationFailedException> shardFailures) {
-        super(totalShards, successfulShards, failedShards, shardFailures);
+    public StoreFilterRequestBuilder(ElasticsearchClient client, StoreFilterAction action) {
+        super(client, action, new StoreFilterRequest());
     }
 }
