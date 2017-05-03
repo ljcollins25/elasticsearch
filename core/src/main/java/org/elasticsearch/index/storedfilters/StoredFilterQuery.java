@@ -121,7 +121,7 @@ public final class StoredFilterQuery extends Query {
         };
     }
 
-    private static Weight getEmptyWeight() {
+    private Weight getEmptyWeight() {
         return new ConstantScoreWeight(this) {
             @Override
             public Scorer scorer(LeafReaderContext context) throws IOException {

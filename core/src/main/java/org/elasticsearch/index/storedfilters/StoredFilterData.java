@@ -5,7 +5,6 @@ import org.apache.lucene.util.BytesRef;
 import org.elasticsearch.common.text.Text;
 import org.elasticsearch.index.mapper.Mapper;
 import org.elasticsearch.index.mapper.ParseContext;
-import sun.reflect.generics.reflectiveObjects.NotImplementedException;
 
 import java.util.concurrent.atomic.AtomicReference;
 

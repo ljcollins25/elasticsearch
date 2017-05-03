@@ -27,7 +27,6 @@ import org.apache.lucene.util.NotDocIdSet;
 import org.apache.lucene.util.RamUsageEstimator;
 import org.apache.lucene.util.packed.PackedInts;
 
-import javax.print.Doc;
 import java.io.IOException;
 import java.util.Arrays;
 
@@ -40,7 +39,6 @@ import java.util.Arrays;
  * set, then the inverse of the set is encoded in a simple short[]. Otherwise
  * a {@link FixedBitSet} is used.
  *
- * @lucene.internal
  */
 public class RoaringDocIdSet extends DocIdSet {
 
