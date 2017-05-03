@@ -18,6 +18,6 @@
  */
 
 /**
- * Refresh index/indices action.
+ * StoreFilter index/indices action.
  */
-package org.elasticsearch.action.refresh;
+package org.elasticsearch.action.storefilter;
