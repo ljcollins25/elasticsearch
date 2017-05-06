@@ -20,6 +20,8 @@
 package org.elasticsearch.action.storefilter;
 
 import org.elasticsearch.action.ShardOperationFailedException;
+import org.elasticsearch.action.index.IndexRequest;
+import org.elasticsearch.action.index.IndexResponse;
 import org.elasticsearch.action.support.ActionFilters;
 import org.elasticsearch.action.support.ActiveShardCount;
 import org.elasticsearch.action.support.replication.BasicReplicationRequest;
@@ -28,6 +30,7 @@ import org.elasticsearch.action.support.replication.TransportBroadcastReplicatio
 import org.elasticsearch.cluster.metadata.IndexNameExpressionResolver;
 import org.elasticsearch.cluster.service.ClusterService;
 import org.elasticsearch.common.inject.Inject;
+import org.elasticsearch.common.io.stream.BytesStreamOutput;
 import org.elasticsearch.common.settings.Settings;
 import org.elasticsearch.index.shard.ShardId;
 import org.elasticsearch.threadpool.ThreadPool;
@@ -38,7 +41,7 @@ import java.util.List;
 /**
  * StoreFilter action.
  */
-public class TransportStoreFilterAction extends TransportBroadcastReplicationAction<StoreFilterRequest, StoreFilterResponse, BasicReplicationRequest, ReplicationResponse> {
+public class TransportStoreFilterAction extends TransportBroadcastReplicationAction<StoreFilterRequest, StoreFilterResponse, IndexRequest, IndexResponse> {
 
     @Inject
     public TransportStoreFilterAction(Settings settings, ThreadPool threadPool, ClusterService clusterService,
@@ -49,15 +52,18 @@ public class TransportStoreFilterAction extends TransportBroadcastReplicationAct
     }
 
     @Override
-    protected ReplicationResponse newShardResponse() {
-        return new ReplicationResponse();
+    protected IndexResponse newShardResponse() {
+        return new IndexResponse();
     }
 
     @Override
-    protected BasicReplicationRequest newShardRequest(StoreFilterRequest request, ShardId shardId) {
-        BasicReplicationRequest replicationRequest = new BasicReplicationRequest(shardId);
-        replicationRequest.waitForActiveShards(ActiveShardCount.NONE);
-        return replicationRequest;
+    protected IndexRequest newShardRequest(StoreFilterRequest request, ShardId shardId) {
+        IndexRequest indexRequest = new IndexRequest();
+        BytesStreamOutput stream = new BytesStreamOutput();
+
+        indexRequest.setShardId(shardId);
+        indexRequest.waitForActiveShards(ActiveShardCount.NONE);
+        return indexRequest;
     }
 
     @Override

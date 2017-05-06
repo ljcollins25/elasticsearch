@@ -19,6 +19,7 @@
 
 package org.elasticsearch.action.storefilter;
 
+import org.elasticsearch.action.index.IndexRequest;
 import org.elasticsearch.action.support.broadcast.BroadcastOperationRequestBuilder;
 import org.elasticsearch.client.ElasticsearchClient;
 
@@ -31,5 +32,10 @@ public class StoreFilterRequestBuilder extends BroadcastOperationRequestBuilder<
 
     public StoreFilterRequestBuilder(ElasticsearchClient client, StoreFilterAction action) {
         super(client, action, new StoreFilterRequest());
+    }
+
+    public StoreFilterRequestBuilder setIndexRequest(IndexRequest indexRequest) {
+        request.setIndexRequest(indexRequest);
+        return this;
     }
 }

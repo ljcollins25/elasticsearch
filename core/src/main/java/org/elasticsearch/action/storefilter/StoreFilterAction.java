@@ -25,7 +25,7 @@ import org.elasticsearch.client.ElasticsearchClient;
 public class StoreFilterAction extends Action<StoreFilterRequest, StoreFilterResponse, StoreFilterRequestBuilder> {
 
     public static final StoreFilterAction INSTANCE = new StoreFilterAction();
-    public static final String NAME = "indices:admin/storefilter";
+    public static final String NAME = "indices:data/write/storefilter";
 
     private StoreFilterAction() {
         super(NAME);

@@ -19,20 +19,48 @@
 
 package org.elasticsearch.action.storefilter;
 
+import org.elasticsearch.action.index.IndexRequest;
 import org.elasticsearch.action.support.broadcast.BroadcastRequest;
+import org.elasticsearch.common.io.stream.StreamInput;
+import org.elasticsearch.common.io.stream.StreamOutput;
+
+import java.io.IOException;
 
 /**
- * A storefilter request making all operations performed since the last storefilter available for search. The (near) real-time
- * capabilities depends on the index engine used. For example, the internal one requires storefilter to be called, but by
- * default a storefilter is scheduled periodically.
+ * A storefilter request
  *
- * @see org.elasticsearch.client.Requests#refreshRequest(String...)
- * @see org.elasticsearch.client.IndicesAdminClient#refresh(StoreFilterRequest)
  * @see StoreFilterResponse
  */
 public class StoreFilterRequest extends BroadcastRequest<StoreFilterRequest> {
 
+    private IndexRequest indexRequest;
+
     public StoreFilterRequest(String... indices) {
         super(indices);
+    }
+
+    public StoreFilterRequest(IndexRequest indexRequest) {
+        this.indexRequest = indexRequest;
+    }
+
+    @Override
+    public void writeTo(StreamOutput out) throws IOException {
+        super.writeTo(out);
+        indexRequest.writeTo(out);
+    }
+
+    @Override
+    public void readFrom(StreamInput in) throws IOException {
+        super.readFrom(in);
+        indexRequest = new IndexRequest();
+        indexRequest.readFrom(in);
+    }
+
+    public IndexRequest getIndexRequest() {
+        return indexRequest;
+    }
+
+    public void setIndexRequest(IndexRequest indexRequest) {
+        this.indexRequest = indexRequest;
     }
 }

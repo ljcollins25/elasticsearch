@@ -19,19 +19,21 @@
 
 package org.elasticsearch.rest.action.document;
 
+import org.elasticsearch.action.admin.indices.refresh.RefreshResponse;
 import org.elasticsearch.action.index.IndexRequest;
+import org.elasticsearch.action.storefilter.StoreFilterAction;
+import org.elasticsearch.action.storefilter.StoreFilterRequest;
+import org.elasticsearch.action.storefilter.StoreFilterResponse;
 import org.elasticsearch.action.support.ActiveShardCount;
 import org.elasticsearch.client.node.NodeClient;
 import org.elasticsearch.common.inject.Inject;
 import org.elasticsearch.common.settings.Settings;
 import org.elasticsearch.common.xcontent.XContentBuilder;
 import org.elasticsearch.index.VersionType;
-import org.elasticsearch.rest.BaseRestHandler;
-import org.elasticsearch.rest.BytesRestResponse;
-import org.elasticsearch.rest.RestChannel;
-import org.elasticsearch.rest.RestController;
-import org.elasticsearch.rest.RestRequest;
+import org.elasticsearch.index.storedfilters.StoredFilterUtils;
+import org.elasticsearch.rest.*;
 import org.elasticsearch.rest.action.RestActions;
+import org.elasticsearch.rest.action.RestBuilderListener;
 import org.elasticsearch.rest.action.RestStatusToXContentListener;
 
 import java.io.IOException;
@@ -39,6 +41,8 @@ import java.io.IOException;
 import static org.elasticsearch.rest.RestRequest.Method.POST;
 import static org.elasticsearch.rest.RestRequest.Method.PUT;
 import static org.elasticsearch.rest.RestStatus.BAD_REQUEST;
+import static org.elasticsearch.rest.RestStatus.OK;
+import static org.elasticsearch.rest.action.RestActions.buildBroadcastShardsHeader;
 
 /**
  *
@@ -102,6 +106,22 @@ public class RestIndexAction extends BaseRestHandler {
         if (waitForActiveShards != null) {
             indexRequest.waitForActiveShards(ActiveShardCount.parseString(waitForActiveShards));
         }
-        client.index(indexRequest, new RestStatusToXContentListener<>(channel, r -> r.getLocation(indexRequest.routing())));
+
+        if (indexRequest.type() == StoredFilterUtils.STORED_FILTER_TYPE) {
+            // TODO[LANCEC]: Not sure if this is correct. The idea is to hook index request for the particular stored filter type to do StoreFilterRequest which
+            // TODO[LANCEC]: is bascially a special index request which is broadcast to all nodes and then replicated to replicas like normal index requests
+
+            client.execute(StoreFilterAction.INSTANCE, new StoreFilterRequest(indexRequest), new RestBuilderListener<StoreFilterResponse>(channel) {
+                @Override
+                public RestResponse buildResponse(StoreFilterResponse response, XContentBuilder builder) throws Exception {
+                    builder.startObject();
+                    buildBroadcastShardsHeader(builder, request, response);
+                    builder.endObject();
+                    return new BytesRestResponse(OK, builder);
+                }
+            });
+        } else {
+            client.index(indexRequest, new RestStatusToXContentListener<>(channel, r -> r.getLocation(indexRequest.routing())));
+        }
     }
 }

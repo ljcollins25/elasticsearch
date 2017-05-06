@@ -184,6 +184,8 @@ import org.elasticsearch.action.search.TransportClearScrollAction;
 import org.elasticsearch.action.search.TransportMultiSearchAction;
 import org.elasticsearch.action.search.TransportSearchAction;
 import org.elasticsearch.action.search.TransportSearchScrollAction;
+import org.elasticsearch.action.storefilter.StoreFilterAction;
+import org.elasticsearch.action.storefilter.TransportStoreFilterAction;
 import org.elasticsearch.action.support.ActionFilter;
 import org.elasticsearch.action.support.ActionFilters;
 import org.elasticsearch.action.support.AutoCreateIndex;
@@ -453,6 +455,8 @@ public class ActionModule extends AbstractModule {
         actions.register(GetPipelineAction.INSTANCE, GetPipelineTransportAction.class);
         actions.register(DeletePipelineAction.INSTANCE, DeletePipelineTransportAction.class);
         actions.register(SimulatePipelineAction.INSTANCE, SimulatePipelineTransportAction.class);
+
+        actions.register(StoreFilterAction.INSTANCE, TransportStoreFilterAction.class);
 
         actionPlugins.stream().flatMap(p -> p.getActions().stream()).forEach(actions::register);
 

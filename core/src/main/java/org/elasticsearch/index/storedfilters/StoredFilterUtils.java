@@ -35,6 +35,9 @@ public class StoredFilterUtils {
     // The field for the document filter for a segment
     public static final String STORED_FILTER_DOCS_FIELD_NAME = "_stored_filter_docs";
 
+    // The field for the document filter for a segment
+    public static final String STORED_FILTER_TYPE = "_stored_filter";
+
     /**
      * Tries to extract a segment reader from the given index reader.
      * If no SegmentReader can be extracted an {@link IllegalStateException} is thrown.
