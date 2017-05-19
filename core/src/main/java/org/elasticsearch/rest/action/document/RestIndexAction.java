@@ -107,7 +107,7 @@ public class RestIndexAction extends BaseRestHandler {
             indexRequest.waitForActiveShards(ActiveShardCount.parseString(waitForActiveShards));
         }
 
-        if (indexRequest.type() == StoredFilterUtils.STORED_FILTER_TYPE) {
+        if (StoredFilterUtils.STORED_FILTER_TYPE.equals(indexRequest.type())) {
             // TODO[LANCEC]: Not sure if this is correct. The idea is to hook index request for the particular stored filter type to do StoreFilterRequest which
             // TODO[LANCEC]: is bascially a special index request which is broadcast to all nodes and then replicated to replicas like normal index requests
 

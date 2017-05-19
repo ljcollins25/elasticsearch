@@ -29,13 +29,17 @@ import org.elasticsearch.action.support.replication.ReplicationResponse;
 import org.elasticsearch.action.support.replication.TransportBroadcastReplicationAction;
 import org.elasticsearch.cluster.metadata.IndexNameExpressionResolver;
 import org.elasticsearch.cluster.service.ClusterService;
+import org.elasticsearch.common.UUIDs;
 import org.elasticsearch.common.inject.Inject;
+import org.elasticsearch.common.io.stream.ByteBufferStreamInput;
 import org.elasticsearch.common.io.stream.BytesStreamOutput;
 import org.elasticsearch.common.settings.Settings;
 import org.elasticsearch.index.shard.ShardId;
 import org.elasticsearch.threadpool.ThreadPool;
 import org.elasticsearch.transport.TransportService;
 
+import java.io.IOException;
+import java.nio.ByteBuffer;
 import java.util.List;
 
 /**
@@ -60,7 +64,17 @@ public class TransportStoreFilterAction extends TransportBroadcastReplicationAct
     protected IndexRequest newShardRequest(StoreFilterRequest request, ShardId shardId) {
         IndexRequest indexRequest = new IndexRequest();
         BytesStreamOutput stream = new BytesStreamOutput();
+        try
+        {
+            // Copy the index request by writing to a stream and reading into new index request
+            request.getIndexRequest().writeTo(stream);
+            indexRequest.readFrom(new ByteBufferStreamInput(ByteBuffer.wrap(stream.bytes().toBytesRef().bytes)));
+        }
+        catch (IOException ex)
+        {
+        }
 
+        indexRequest.id(UUIDs.base64UUID());
         indexRequest.setShardId(shardId);
         indexRequest.waitForActiveShards(ActiveShardCount.NONE);
         return indexRequest;

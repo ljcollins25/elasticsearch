@@ -35,8 +35,11 @@ public class StoredFilterUtils {
     // The field for the document filter for a segment
     public static final String STORED_FILTER_DOCS_FIELD_NAME = "_stored_filter_docs";
 
-    // The field for the document filter for a segment
-    public static final String STORED_FILTER_TYPE = "_stored_filter";
+    // The type for stored filter documents
+    public static final String STORED_FILTER_TYPE = "stored_filter";
+
+    // The field under which the stored filter query is stored
+    public static final String STORED_FILTER_QUERY_FIELD_NAME = "_query";
 
     /**
      * Tries to extract a segment reader from the given index reader.

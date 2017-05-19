@@ -40,6 +40,7 @@ public class StoreFilterRequest extends BroadcastRequest<StoreFilterRequest> {
     }
 
     public StoreFilterRequest(IndexRequest indexRequest) {
+        super(new String[] { indexRequest.index() });
         this.indexRequest = indexRequest;
     }
 
