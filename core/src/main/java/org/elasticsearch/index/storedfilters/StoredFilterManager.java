@@ -39,8 +39,6 @@ public class StoredFilterManager {
     private ConcurrentHashMap<OnGoingMerge, Integer> mergeToIndexMap = new ConcurrentHashMap<>();
 
     private ConcurrentHashMap<String, StoredFilterData> filterDataMap = new ConcurrentHashMap<>();
-    private List<String> filterFieldName = Arrays.asList("_stored_filter");
-    private List<String> emptyfilterFieldName = new ArrayList<>();
 
     private IndexWriter indexWriter;
     private Engine engine;
