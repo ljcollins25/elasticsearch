@@ -36,7 +36,7 @@ public class StoredFilterData
 
     public void changeState(State fromState, State toState, int mergeCursor)
     {
-        mergeCursor = mergeCursor;
+        this.mergeCursor = mergeCursor;
         boolean stateChanged = tryChangeState(fromState, toState);
         assert stateChanged;
     }

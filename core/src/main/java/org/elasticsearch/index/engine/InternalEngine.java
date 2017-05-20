@@ -57,6 +57,7 @@ import org.elasticsearch.common.util.concurrent.KeyedLock;
 import org.elasticsearch.common.util.concurrent.ReleasableLock;
 import org.elasticsearch.index.IndexSettings;
 import org.elasticsearch.index.VersionType;
+import org.elasticsearch.index.mapper.ParseContext;
 import org.elasticsearch.index.mapper.Uid;
 import org.elasticsearch.index.merge.MergeStats;
 import org.elasticsearch.index.merge.OnGoingMerge;
@@ -65,6 +66,7 @@ import org.elasticsearch.index.shard.ElasticsearchMergePolicy;
 import org.elasticsearch.index.shard.ShardId;
 import org.elasticsearch.index.shard.TranslogRecoveryPerformer;
 import org.elasticsearch.index.storedfilters.StoredFilterManager;
+import org.elasticsearch.index.storedfilters.StoredFilterUtils;
 import org.elasticsearch.index.translog.Translog;
 import org.elasticsearch.index.translog.TranslogConfig;
 import org.elasticsearch.index.translog.TranslogCorruptedException;
@@ -535,11 +537,16 @@ public class InternalEngine extends Engine {
         return updatedVersion;
     }
 
-    private static void index(final Index index, final IndexWriter indexWriter) throws IOException {
+    private void index(final Index index, final IndexWriter indexWriter) throws IOException {
         if (index.docs().size() > 1) {
             indexWriter.addDocuments(index.docs());
         } else {
-            indexWriter.addDocument(index.docs().get(0));
+            ParseContext.Document doc = index.docs().get(0);
+            if (StoredFilterUtils.STORED_FILTER_TYPE.equals(index.type())) {
+                storedFilterManager.registerStoredFilter(index);
+            } else {
+                indexWriter.addDocument(doc);
+            }
         }
     }
 

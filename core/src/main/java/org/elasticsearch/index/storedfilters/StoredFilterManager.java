@@ -13,6 +13,7 @@ import org.apache.lucene.store.DataOutput;
 import org.elasticsearch.index.engine.Engine;
 import org.elasticsearch.index.engine.EngineException;
 import org.elasticsearch.index.mapper.ParseContext;
+import org.elasticsearch.index.mapper.StoredFilterQueryFieldMapper;
 import org.elasticsearch.index.merge.OnGoingMerge;
 
 import java.io.IOException;
@@ -62,7 +63,16 @@ public class StoredFilterManager {
 
     // if not add new document to index containing filter doc id sets
 
-    public void registerStoredFilter(String filterName, Query filter, ParseContext.Document document, IndexWriter indexWriter, IndexReader indexReader) {
+    public void registerStoredFilter(Engine.Index index) {
+        String filterName = index.uid().text();
+        ParseContext.Document doc = index.docs().get(0);
+        StoredFilterQueryFieldMapper.StoredFilterQueryField filterField =
+            (StoredFilterQueryFieldMapper.StoredFilterQueryField)doc.getField(StoredFilterUtils.STORED_FILTER_QUERY_FIELD_NAME);
+
+        registerStoredFilter(filterName, filterField.query(), doc);
+    }
+
+    public void registerStoredFilter(String filterName, Query filter, ParseContext.Document document) {
         // Add filter to map. StoredFilterQuery's after this point will return the
         // filter query until the filter is removed
         StoredFilterData filterData = new StoredFilterData(filterName, filter, document);

@@ -35,12 +35,14 @@ import org.elasticsearch.common.io.stream.ByteBufferStreamInput;
 import org.elasticsearch.common.io.stream.BytesStreamOutput;
 import org.elasticsearch.common.settings.Settings;
 import org.elasticsearch.index.shard.ShardId;
+import org.elasticsearch.index.storedfilters.StoredFilterUtils;
 import org.elasticsearch.threadpool.ThreadPool;
 import org.elasticsearch.transport.TransportService;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.List;
+import java.util.Map;
 
 /**
  * StoreFilter action.
@@ -73,6 +75,10 @@ public class TransportStoreFilterAction extends TransportBroadcastReplicationAct
         catch (IOException ex)
         {
         }
+
+        Map<String, Object> sourceMap = indexRequest.sourceAsMap();
+        sourceMap.put(StoredFilterUtils.STORED_FILTER_NAME_FIELD_NAME, indexRequest.id());
+        indexRequest.source(sourceMap);
 
         indexRequest.id(UUIDs.base64UUID());
         indexRequest.setShardId(shardId);

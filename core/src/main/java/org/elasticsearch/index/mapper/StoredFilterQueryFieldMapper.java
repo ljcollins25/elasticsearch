@@ -65,6 +65,7 @@ public class StoredFilterQueryFieldMapper extends FieldMapper {
         public static final MappedFieldType FIELD_TYPE = new StoredFilterQueryFieldType();
 
         static {
+            FIELD_TYPE.setStored(true);
             FIELD_TYPE.setIndexOptions(IndexOptions.NONE);
             FIELD_TYPE.setHasDocValues(false);
             FIELD_TYPE.freeze();
@@ -99,7 +100,7 @@ public class StoredFilterQueryFieldMapper extends FieldMapper {
     public static class TypeParser implements Mapper.TypeParser {
         @Override
         public Mapper.Builder parse(String name, Map<String, Object> node, ParserContext parserContext) throws MapperParsingException {
-            StoredFilterQueryFieldMapper.Builder builder = new StoredFilterQueryFieldMapper.Builder(name);
+            StoredFilterQueryFieldMapper.Builder builder = new StoredFilterQueryFieldMapper.Builder(name, parserContext.queryShardContext());
             parseField(builder, name, node, parserContext);
             return builder;
         }
@@ -133,11 +134,11 @@ public class StoredFilterQueryFieldMapper extends FieldMapper {
     @Override
     protected void parseCreateField(ParseContext context, List<Field> fields) throws IOException {
         QueryShardContext queryShardContext = new QueryShardContext(this.queryShardContext);
-        if (context.doc().getField(queryBuilderField.name()) != null) {
+        if (context.doc().getField(fieldType.name()) != null) {
             // If a percolator query has been defined in an array object then multiple percolator queries
             // could be provided. In order to prevent this we fail if we try to parse more than one query
             // for the current document.
-            throw new IllegalArgumentException("a document can only contain one percolator query");
+            throw new IllegalArgumentException("a stored filter document can only contain one query");
         }
 
         XContentParser parser = context.parser();
@@ -148,32 +149,17 @@ public class StoredFilterQueryFieldMapper extends FieldMapper {
         // Fetching of terms, shapes and indexed scripts happen during this rewrite:
         queryBuilder = queryBuilder.rewrite(queryShardContext);
 
-        try (XContentBuilder builder = XContentFactory.contentBuilder(QUERY_BUILDER_CONTENT_TYPE)) {
-            queryBuilder.toXContent(builder, new MapParams(Collections.emptyMap()));
-            builder.flush();
-            byte[] queryBuilderAsBytes = BytesReference.toBytes(builder.bytes());
-            context.doc().add(new Field(queryBuilderField.name(), queryBuilderAsBytes, queryBuilderField.fieldType()));
-        }
-
-        Query query = toQuery(queryShardContext, mapUnmappedFieldAsString, queryBuilder);
+        boolean mapUnmappedFieldAsString = true;
+        Query query = toQuery(queryShardContext, queryBuilder);
 
         StoredFilterQueryField field = (StoredFilterQueryField) context.doc().getByKey(fieldType().name());
         if (field == null) {
-            field = new StoredFilterQueryField(fieldType().name(), value);
+            field = new StoredFilterQueryField(query);
             context.doc().addWithKey(fieldType().name(), field);
         }
     }
 
-    public static Query parseQuery(QueryShardContext context, boolean mapUnmappedFieldsAsString, XContentParser parser) throws IOException {
-        return parseQuery(context, mapUnmappedFieldsAsString, context.newParseContext(parser), parser);
-    }
-
-    public static Query parseQuery(QueryShardContext context, boolean mapUnmappedFieldsAsString, QueryParseContext queryParseContext,
-                                   XContentParser parser) throws IOException {
-        return toQuery(context, mapUnmappedFieldsAsString, parseQueryBuilder(queryParseContext, parser.getTokenLocation()));
-    }
-
-    static Query toQuery(QueryShardContext context, boolean mapUnmappedFieldsAsString, QueryBuilder queryBuilder) throws IOException {
+    static Query toQuery(QueryShardContext context, QueryBuilder queryBuilder) throws IOException {
         // This means that fields in the query need to exist in the mapping prior to registering this query
         // The reason that this is required, is that if a field doesn't exist then the query assumes defaults, which may be undesired.
         //
@@ -183,11 +169,8 @@ public class StoredFilterQueryFieldMapper extends FieldMapper {
         // Query parsing can't introduce new fields in mappings (which happens when registering a percolator query),
         // because field type can't be inferred from queries (like document do) so the best option here is to disallow
         // the usage of unmapped fields in percolator queries to avoid unexpected behaviour
-        //
-        // if index.percolator.map_unmapped_fields_as_string is set to true, query can contain unmapped fields which will be mapped
-        // as an analyzed string.
         context.setAllowUnmappedFields(false);
-        context.setMapUnmappedFieldAsString(mapUnmappedFieldsAsString);
+        context.setMapUnmappedFieldAsString(false);
         return queryBuilder.toQuery(context);
     }
 
@@ -209,8 +192,12 @@ public class StoredFilterQueryFieldMapper extends FieldMapper {
         private final Query query;
 
         public StoredFilterQueryField(Query query) {
-            super(StoredFilterUtils.STORED_FILTER_QUERY_FIELD_NAME, "", Defaults.FIELD_TYPE);
+            super(StoredFilterUtils.STORED_FILTER_QUERY_FIELD_NAME, "queryContent", Defaults.FIELD_TYPE);
             this.query = query;
+        }
+
+        public Query query() {
+            return query;
         }
     }
 }
