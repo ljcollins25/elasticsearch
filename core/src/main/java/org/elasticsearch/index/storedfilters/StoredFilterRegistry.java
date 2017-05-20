@@ -12,12 +12,10 @@ import org.elasticsearch.index.engine.EngineException;
 import org.elasticsearch.index.mapper.ParseContext;
 import org.elasticsearch.index.mapper.StoredFilterQueryFieldMapper;
 import org.elasticsearch.index.merge.OnGoingMerge;
+import org.elasticsearch.index.shard.ShardId;
 
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -25,25 +23,18 @@ import java.util.concurrent.atomic.AtomicInteger;
  * Created by lancec on 11/5/2016.
  */
 public class StoredFilterRegistry {
-    private ConcurrentHashMap<String, StoredFilterData> filterDataMap = new ConcurrentHashMap<>();
+    private ConcurrentHashMap<ShardId, StoredFilterManager> shardManagers = new ConcurrentHashMap<>();
 
     public StoredFilterRegistry()
     {
     }
 
-    public void registerStoredFilter(StoredFilterData filterData) {
-        // Add filter to map. StoredFilterQuery's after this point will return the
-        // filter query until the filter is removed
-        filterDataMap.put(filterData.filterName.string(), filterData);
-    }
-
-    public Iterable<StoredFilterData> filters()
+    public void registerManager(ShardId shardId, StoredFilterManager shardManager)
     {
-        return filterDataMap.values();
+        shardManagers.put(shardId, shardManager);
     }
 
-    public void removeFilter(StoredFilterData filterData) {
-
-        filterDataMap.remove(filterData.filterName);
+    public StoredFilterManager getShardManager(ShardId shardId) {
+        return shardManagers.get(shardId);
     }
 }

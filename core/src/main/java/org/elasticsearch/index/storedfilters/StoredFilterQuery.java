@@ -25,6 +25,7 @@ import org.apache.lucene.search.*;
 import org.apache.lucene.store.ByteArrayDataInput;
 import org.apache.lucene.util.BytesRef;
 import org.elasticsearch.common.text.Text;
+import org.elasticsearch.index.shard.ShardId;
 
 import java.io.IOException;
 import java.util.HashMap;

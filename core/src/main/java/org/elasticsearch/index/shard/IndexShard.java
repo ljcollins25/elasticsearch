@@ -1610,7 +1610,8 @@ public class IndexShard extends AbstractIndexShardComponent implements IndicesCl
             threadPool, indexSettings, warmer, store, deletionPolicy, indexSettings.getMergePolicy(),
             mapperService.indexAnalyzer(), similarityService.similarity(mapperService), codecService, shardEventListener, translogRecoveryPerformer, indexCache.query(), cachingPolicy, translogConfig,
             IndexingMemoryController.SHARD_INACTIVE_TIME_SETTING.get(indexSettings.getSettings()), refreshListeners,
-            maxUnsafeAutoIdTimestamp);
+            maxUnsafeAutoIdTimestamp)
+            .withStoredFilterRegistry(mapperService.storedFilterRegistry);
     }
 
     /**

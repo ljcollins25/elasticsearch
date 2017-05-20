@@ -90,7 +90,7 @@ public class StoredFilterQueryBuilder extends AbstractQueryBuilder<StoredFilterQ
     public static Optional<StoredFilterQueryBuilder> fromXContent(QueryParseContext parseContext) throws IOException {
         XContentParser parser = parseContext.parser();
 
-        String fieldPattern = null;
+        String filterId = null;
         String queryName = null;
         float boost = AbstractQueryBuilder.DEFAULT_BOOST;
 
@@ -101,7 +101,7 @@ public class StoredFilterQueryBuilder extends AbstractQueryBuilder<StoredFilterQ
                 currentFieldName = parser.currentName();
             } else if (token.isValue()) {
                 if (parseContext.getParseFieldMatcher().match(currentFieldName, ID_FIELD)) {
-                    fieldPattern = parser.text();
+                    filterId = parser.text();
                 } else if (parseContext.getParseFieldMatcher().match(currentFieldName, AbstractQueryBuilder.NAME_FIELD)) {
                     queryName = parser.text();
                 } else if (parseContext.getParseFieldMatcher().match(currentFieldName, AbstractQueryBuilder.BOOST_FIELD)) {
@@ -116,11 +116,11 @@ public class StoredFilterQueryBuilder extends AbstractQueryBuilder<StoredFilterQ
             }
         }
 
-        if (fieldPattern == null) {
+        if (filterId == null) {
             throw new ParsingException(parser.getTokenLocation(), "[" + StoredFilterQueryBuilder.NAME + "] must be provided with a [field]");
         }
 
-        StoredFilterQueryBuilder builder = new StoredFilterQueryBuilder(fieldPattern);
+        StoredFilterQueryBuilder builder = new StoredFilterQueryBuilder(filterId);
         builder.queryName(queryName);
         builder.boost(boost);
         return Optional.of(builder);
@@ -131,29 +131,9 @@ public class StoredFilterQueryBuilder extends AbstractQueryBuilder<StoredFilterQ
         return newFilter(context, filterId);
     }
 
-    public static Query newFilter(QueryShardContext context, String fieldPattern) {
-        final FieldNamesFieldMapper.FieldNamesFieldType fieldNamesFieldType =
-                (FieldNamesFieldMapper.FieldNamesFieldType)context.getMapperService().fullName(FieldNamesFieldMapper.NAME);
-        if (fieldNamesFieldType == null) {
-            // can only happen when no types exist, so no docs exist either
-            return Queries.newMatchNoDocsQuery("Missing types in \"" + NAME + "\" query.");
-        }
+    public static Query newFilter(QueryShardContext context, String filterId) {
 
-        final Collection<String> fields;
-        if (context.getObjectMapper(fieldPattern) != null) {
-            // the _field_names field also indexes objects, so we don't have to
-            // do any more work to support exists queries on whole objects
-            fields = Collections.singleton(fieldPattern);
-        } else {
-            fields = context.simpleMatchToIndexNames(fieldPattern);
-        }
-
-        BooleanQuery.Builder boolFilterBuilder = new BooleanQuery.Builder();
-        for (String field : fields) {
-            Query filter = fieldNamesFieldType.termQuery(field, context);
-            boolFilterBuilder.add(filter, BooleanClause.Occur.SHOULD);
-        }
-        return new ConstantScoreQuery(boolFilterBuilder.build());
+        return new StoredFilterQuery(filterId, context.getStoredFilterManager());
     }
 
     @Override

@@ -52,7 +52,10 @@ import org.elasticsearch.index.mapper.MapperService;
 import org.elasticsearch.index.mapper.ObjectMapper;
 import org.elasticsearch.index.mapper.TextFieldMapper;
 import org.elasticsearch.index.query.support.NestedScope;
+import org.elasticsearch.index.shard.ShardId;
 import org.elasticsearch.index.similarity.SimilarityService;
+import org.elasticsearch.index.storedfilters.StoredFilterManager;
+import org.elasticsearch.index.storedfilters.StoredFilterRegistry;
 import org.elasticsearch.indices.query.IndicesQueriesRegistry;
 import org.elasticsearch.script.ScriptService;
 import org.elasticsearch.search.internal.SearchContext;
@@ -86,6 +89,9 @@ public class QueryShardContext extends QueryRewriteContext {
     private NestedScope nestedScope;
     private boolean isFilter;
 
+    private StoredFilterRegistry storedFilterRegistry;
+    private ShardId shardId;
+
     public QueryShardContext(IndexSettings indexSettings, BitsetFilterCache bitsetFilterCache, IndexFieldDataService indexFieldDataService,
                              MapperService mapperService, SimilarityService similarityService, ScriptService scriptService,
                              final IndicesQueriesRegistry indicesQueriesRegistry, Client client,
@@ -106,6 +112,8 @@ public class QueryShardContext extends QueryRewriteContext {
                 source.similarityService, source.scriptService, source.indicesQueriesRegistry, source.client,
                 source.reader, source.clusterState);
         this.types = source.getTypes();
+        this.storedFilterRegistry = source.storedFilterRegistry;
+        this.shardId = source.shardId;
     }
 
     private void reset() {
@@ -326,5 +334,17 @@ public class QueryShardContext extends QueryRewriteContext {
 
     public final Index index() {
         return indexSettings.getIndex();
+    }
+
+    public QueryShardContext withStoredFilterRegistry(StoredFilterRegistry storedFilterRegistry, ShardId shardId) {
+        this.storedFilterRegistry = storedFilterRegistry;
+        this.shardId = shardId;
+        return this;
+    }
+
+    public StoredFilterManager getStoredFilterManager() {
+        assert storedFilterRegistry != null;
+        assert shardId != null;
+        return storedFilterRegistry.getShardManager(shardId);
     }
 }

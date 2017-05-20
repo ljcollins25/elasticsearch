@@ -67,6 +67,7 @@ import org.elasticsearch.index.shard.ShardPath;
 import org.elasticsearch.index.similarity.SimilarityService;
 import org.elasticsearch.index.store.IndexStore;
 import org.elasticsearch.index.store.Store;
+import org.elasticsearch.index.storedfilters.StoredFilterRegistry;
 import org.elasticsearch.index.translog.Translog;
 import org.elasticsearch.indices.AliasFilterParsingException;
 import org.elasticsearch.indices.InvalidAliasNameException;
@@ -448,13 +449,13 @@ public class IndexService extends AbstractIndexComponent implements IndicesClust
      * Creates a new QueryShardContext. The context has not types set yet, if types are required set them via
      * {@link QueryShardContext#setTypes(String...)}
      */
-    public QueryShardContext newQueryShardContext(IndexReader indexReader) {
+    public QueryShardContext newQueryShardContext(IndexReader indexReader, ShardId shardId) {
         return new QueryShardContext(
                 indexSettings, indexCache.bitsetFilterCache(), indexFieldData, mapperService(),
                 similarityService(), nodeServicesProvider.getScriptService(), nodeServicesProvider.getIndicesQueriesRegistry(),
                 nodeServicesProvider.getClient(), indexReader,
                 nodeServicesProvider.getClusterService().state()
-        );
+        ).withStoredFilterRegistry(mapperService.storedFilterRegistry, shardId);
     }
 
     /**
@@ -463,7 +464,7 @@ public class IndexService extends AbstractIndexComponent implements IndicesClust
      * used for rewriting since it does not know about the current {@link IndexReader}.
      */
     public QueryShardContext newQueryShardContext() {
-        return newQueryShardContext(null);
+        return newQueryShardContext(null, null);
     }
 
     public ThreadPool getThreadPool() {

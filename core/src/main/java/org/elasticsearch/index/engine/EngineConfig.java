@@ -38,6 +38,7 @@ import org.elasticsearch.index.shard.RefreshListeners;
 import org.elasticsearch.index.shard.ShardId;
 import org.elasticsearch.index.shard.TranslogRecoveryPerformer;
 import org.elasticsearch.index.store.Store;
+import org.elasticsearch.index.storedfilters.StoredFilterRegistry;
 import org.elasticsearch.index.translog.TranslogConfig;
 import org.elasticsearch.indices.IndexingMemoryController;
 import org.elasticsearch.threadpool.ThreadPool;
@@ -69,6 +70,8 @@ public final class EngineConfig {
     private final long maxUnsafeAutoIdTimestamp;
     @Nullable
     private final RefreshListeners refreshListeners;
+
+    private StoredFilterRegistry storedFilterRegistry;
 
     /**
      * Index setting to change the low level lucene codec used for writing new segments.
@@ -334,5 +337,14 @@ public final class EngineConfig {
      */
     public long getMaxUnsafeAutoIdTimestamp() {
         return indexSettings.getValue(INDEX_OPTIMIZE_AUTO_GENERATED_IDS) ? maxUnsafeAutoIdTimestamp : Long.MAX_VALUE;
+    }
+
+    public EngineConfig withStoredFilterRegistry(StoredFilterRegistry storedFilterRegistry) {
+        this.storedFilterRegistry = storedFilterRegistry;
+        return this;
+    }
+
+    public StoredFilterRegistry getStoredFilterRegistry() {
+        return storedFilterRegistry != null ? storedFilterRegistry : new StoredFilterRegistry();
     }
 }

@@ -28,8 +28,6 @@ import java.util.concurrent.atomic.AtomicInteger;
  * Created by lancec on 11/5/2016.
  */
 public class StoredFilterManager {
-
-
     // the index of the last merge registered
     private AtomicInteger nextMergeIndex = new AtomicInteger(0);
 
@@ -42,11 +40,14 @@ public class StoredFilterManager {
 
     private IndexWriter indexWriter;
     private Engine engine;
+    private final StoredFilterRegistry storedFilterRegistry;
 
     public StoredFilterManager(IndexWriter indexWriter, Engine engine)
     {
+        this.storedFilterRegistry = engine.config().getStoredFilterRegistry();
         this.indexWriter = indexWriter;
         this.engine = engine;
+        storedFilterRegistry.registerManager(engine.config().getShardId(), this);
     }
 
     // Create doc id sets for filter based on current commit
