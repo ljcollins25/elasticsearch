@@ -1,10 +1,17 @@
 package org.elasticsearch.index.storedfilters;
 
+import org.apache.lucene.document.Document;
 import org.apache.lucene.index.*;
+import org.apache.lucene.queryparser.surround.query.AndQuery;
 import org.apache.lucene.search.*;
+import org.apache.lucene.store.ByteArrayDataInput;
+import org.apache.lucene.util.BytesRef;
+import org.elasticsearch.common.text.Text;
 
 import java.io.IOException;
 import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -57,6 +64,48 @@ public class StoredFilterUtils {
         }
         // hard fail - we can't get a SegmentReader
         throw new IllegalStateException("Can not extract segment reader from given index reader [" + reader + "]");
+    }
+
+    public static void addSegmentStoredFilterDocs(String segmentName, IndexSearcher searcher, List<StoredFilterDocsProvider> storedFilterDatas) throws IOException {
+
+        // Find all stored filter documents where docs are stored for the segment
+        Query storedFiltersForSegmentQuery = new TermQuery(new Term(StoredFilterUtils.STORED_FILTER_SEGMENTS_FIELD_NAME, segmentName));
+
+        searcher.search(storedFiltersForSegmentQuery, new Collector() {
+            @Override
+            public LeafCollector getLeafCollector(LeafReaderContext context) throws IOException {
+                final int docBase = context.docBase;
+
+                return new LeafCollector() {
+                    @Override
+                    public void setScorer(Scorer scorer) throws IOException {
+                    }
+
+                    @Override
+                    public void collect(int doc) throws IOException {
+                        Document storedFilterDocument = searcher.doc(doc);
+                        IndexableField filterNameField = storedFilterDocument.getField(StoredFilterUtils.STORED_FILTER_NAME_FIELD_NAME);
+                        Text filterName = new Text(filterNameField.stringValue());
+                        IndexableField[] segmentsFields = storedFilterDocument.getFields(StoredFilterUtils.STORED_FILTER_SEGMENTS_FIELD_NAME);
+                        IndexableField[] docsFields = storedFilterDocument.getFields(StoredFilterUtils.STORED_FILTER_DOCS_FIELD_NAME);
+                        for (int i = 0; i < segmentsFields.length; i++) {
+                            String documentSegmentName = segmentsFields[i].stringValue();
+                            if (documentSegmentName.equals(segmentName))
+                            {
+                                BytesRef bytes = docsFields[i].binaryValue();
+                                RoaringDocIdSet docIdSet = RoaringDocIdSet.read(new ByteArrayDataInput(bytes.bytes, bytes.offset, bytes.length));
+                                storedFilterDatas.add(new StoredFilterDocs(filterName.bytes().toBytesRef(), docIdSet));
+                            }
+                        }
+                    }
+                };
+            }
+
+            @Override
+            public boolean needsScores() {
+                return false;
+            }
+        });
     }
 
     public static Map<String, RoaringDocIdSet.Builder> getSegmentDocIdSetsForFilterAndSearcher(StoredFilterData filterData, IndexSearcher searcher) throws IOException

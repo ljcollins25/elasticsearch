@@ -426,7 +426,7 @@ public class RoaringDocIdSet extends DocIdSet {
     @Override
     public DocIdSetIterator iterator() throws IOException {
         if (cardinality == 0) {
-            return null;
+            return DocIdSetIterator.empty();
         }
         return new Iterator();
     }

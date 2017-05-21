@@ -80,7 +80,7 @@ public class TransportStoreFilterAction extends TransportBroadcastReplicationAct
         sourceMap.put(StoredFilterUtils.STORED_FILTER_NAME_FIELD_NAME, indexRequest.id());
         indexRequest.source(sourceMap);
 
-        indexRequest.id(UUIDs.base64UUID());
+        //indexRequest.id(UUIDs.base64UUID());
         indexRequest.setShardId(shardId);
         indexRequest.waitForActiveShards(ActiveShardCount.NONE);
         return indexRequest;

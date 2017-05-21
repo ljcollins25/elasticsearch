@@ -2,14 +2,12 @@ package org.elasticsearch.index.storedfilters;
 
 import org.apache.lucene.codecs.FieldsProducer;
 import org.apache.lucene.codecs.compressing.GrowableByteArrayDataOutput;
-import org.apache.lucene.document.BinaryDocValuesField;
 import org.apache.lucene.document.Field;
 import org.apache.lucene.document.StoredField;
 import org.apache.lucene.document.StringField;
 import org.apache.lucene.index.*;
-import org.apache.lucene.search.IndexSearcher;
 import org.apache.lucene.search.Query;
-import org.apache.lucene.store.DataOutput;
+import org.apache.lucene.util.BytesRef;
 import org.elasticsearch.index.engine.Engine;
 import org.elasticsearch.index.engine.EngineException;
 import org.elasticsearch.index.mapper.ParseContext;
@@ -17,10 +15,7 @@ import org.elasticsearch.index.mapper.StoredFilterQueryFieldMapper;
 import org.elasticsearch.index.merge.OnGoingMerge;
 
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -233,8 +228,12 @@ public class StoredFilterManager {
     }
 
     public class StoredFilterCodecReader extends FilterCodecReader {
+        final String segmentName;
         public StoredFilterCodecReader(CodecReader in) {
             super(in);
+
+            SegmentReader segmentReader = StoredFilterUtils.segmentReader(in);
+            segmentName = segmentReader.getSegmentName();
         }
 
         public CodecReader unwrap() {
@@ -243,19 +242,38 @@ public class StoredFilterManager {
 
         @Override
         public FieldsProducer getPostingsReader() {
+            // TODO: Create fields for stored filters which have already been stored
             FieldsProducer postingsReader = super.getPostingsReader();
-            if (filterDataMap.size() == 0)
-            {
-                return postingsReader;
-            }
-
 
             List<Fields> fields = new ArrayList<>();
             fields.add(postingsReader);
-            List<StoredFilterData> storedFilterDatas = new ArrayList<>();
+            HashSet<BytesRef> terms = new HashSet<>();
+            List<StoredFilterDocsProvider> storedFilterDatas = new ArrayList<>();
+
+            Engine.Searcher searcher = null;
+
+            try {
+                searcher = engine.acquireSearcher("store_filter_fields");
+                StoredFilterUtils.addSegmentStoredFilterDocs(segmentName, searcher.searcher(), storedFilterDatas);
+            }
+            catch (IOException ex) { }
+            catch (EngineException ex) { }
+            finally
+            {
+                if (searcher != null)
+                {
+                    searcher.close();
+                }
+            }
+
+            for (StoredFilterDocsProvider filterData : storedFilterDatas) {
+                terms.add(filterData.filterTerm());
+            }
 
             for (StoredFilterData filterData : filterDataMap.values()) {
-                storedFilterDatas.add(filterData);
+                if (terms.add(filterData.filterTerm())) {
+                    storedFilterDatas.add(filterData);
+                }
             }
 
             if (storedFilterDatas.size() == 0)

@@ -27,18 +27,18 @@ public class StoredFilterDataFields extends Fields {
     // TODO: Should the doc id set be cached between instances? No. A segment should only be merging in one place a time.
     // TODO: Track which segments have filter data written so that data isn't serialized into _stored_filter_docs stored field
 
-    public StoredFilterDataFields(LeafReader reader, List<StoredFilterData> storedFilterDatas)
+    public StoredFilterDataFields(LeafReader reader, List<StoredFilterDocsProvider> storedFilterDatas)
     {
         filterFieldName = new ArrayList<>();
         filterFieldName.add(StoredFilterUtils.STORED_FILTER_TERM_FIELD_NAME);
-        storedFilterDatas.sort((o1, o2) -> o1.filterNameBytes.compareTo(o2.filterNameBytes));
+        storedFilterDatas.sort((o1, o2) -> o1.filterTerm().compareTo(o2.filterTerm()));
         this.storedFilterDatas = storedFilterDatas.toArray(EMPTY_ARRAY);
         this.reader = reader;
         this.leafSearcher = new IndexSearcher(reader);
     }
 
     public RoaringDocIdSet getFilterDocs(Query filter) throws IOException {
-        IndexReaderContext readerContext = leafSearcher.getTopReaderContext();
+        IndexReaderContext readerContext = reader.getContext();
         RoaringDocIdSet.Builder docIdSetBuilder = new RoaringDocIdSet.Builder(reader.maxDoc());
 
         leafSearcher.search(filter, new Collector() {
