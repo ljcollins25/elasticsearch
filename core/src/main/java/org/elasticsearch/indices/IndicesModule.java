@@ -123,6 +123,7 @@ public class IndicesModule extends AbstractModule {
         metadataMappers.put(TimestampFieldMapper.NAME, new TimestampFieldMapper.TypeParser());
         metadataMappers.put(TTLFieldMapper.NAME, new TTLFieldMapper.TypeParser());
         metadataMappers.put(VersionFieldMapper.NAME, new VersionFieldMapper.TypeParser());
+        metadataMappers.put(StoredFilterTermFieldMapper.NAME, new StoredFilterTermFieldMapper.TypeParser());
         metadataMappers.put(ParentFieldMapper.NAME, new ParentFieldMapper.TypeParser());
         // _field_names is not registered here, see below
 

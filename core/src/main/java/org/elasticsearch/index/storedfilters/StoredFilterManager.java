@@ -58,7 +58,7 @@ public class StoredFilterManager {
     // if not add new document to index containing filter doc id sets
 
     public void registerStoredFilter(Engine.Index index) {
-        String filterName = index.uid().text();
+        String filterName = index.id();
         ParseContext.Document doc = index.docs().get(0);
         StoredFilterQueryFieldMapper.StoredFilterQueryField filterField =
             (StoredFilterQueryFieldMapper.StoredFilterQueryField)doc.getField(StoredFilterUtils.STORED_FILTER_QUERY_FIELD_NAME);
@@ -73,14 +73,6 @@ public class StoredFilterManager {
         filterDataMap.put(filterName, filterData);
 
         changeFilterState(filterData, StoredFilterData.State.CREATED, StoredFilterData.State.ADDED);
-
-        // await BeforeNextCommitOrFlushOrOutstandingMergesComplete();
-
-        // Add fields to filter document (NOTE: the values of the fields must have a one to one correspondence
-        // STORED_FILTER_SEGMENTS_FIELD_NAME (_stored_filter_segments) - the segments
-        // STORED_FILTER_DOCS_FIELD_NAME (_stored_filter_docs) - the doc id sets for the segments
-
-        // TODO: Add _stored_filter_docs field to document
 
         updateFilter(filterData);
     }
@@ -124,23 +116,24 @@ public class StoredFilterManager {
 
     public void removeFilter(StoredFilterData filterData) {
 
-        filterDataMap.remove(filterData.filterName);
+        filterDataMap.remove(filterData.filterName.string());
 
         changeFilterState(filterData, StoredFilterData.State.REMOVING, StoredFilterData.State.REMOVED);
     }
 
-    // Two new fields:
-    // _stored_filter [StoredFilterUtils.STORED_FILTER_SEGMENTS_FIELD_NAME] (terms are filter names)
-    // IndexOptions.DOCS (not stored)
-    // _stored_filter_docs [StoredFilterUtils.STORED_FILTER_DOCS_FIELD_NAME] (no terms) - per segment document?
-    // IndexOptions.NONE (stored)
+    // New fields:
+    // STORED_FILTER_SEGMENTS_FIELD_NAME (_stored_filter_segments) - the segments with matching docs
+    // STORED_FILTER_DOCS_FIELD_NAME (_stored_filter_docs) - the doc id sets for the segments
+    // STORED_FILTER_NODOCS_SEGMENTS_FIELD_NAME (_stored_filter_nodocs_segments) - the segments with no matching docs
 
     public void storeFilter(StoredFilterData filterData) {
+
+        filterData.document.add(new StringField(StoredFilterUtils.STORED_FILTER_NAME_FIELD_NAME, filterData.filterName.string(), Field.Store.YES));
 
         Engine.Searcher searcher = null;
 
         try {
-            searcher = engine.acquireSearcher("store_filter");
+            searcher = engine.acquireSearcher("storeFilter");
 
             GrowableByteArrayDataOutput docsOutput = new GrowableByteArrayDataOutput(1024);
 
@@ -151,6 +144,11 @@ public class StoredFilterManager {
             for (String segment : docsBySegmentMap.keySet()) {
                 RoaringDocIdSet.Builder docsBuilder = docsBySegmentMap.get(segment);
                 RoaringDocIdSet docs = docsBuilder.build();
+                if (docs.cardinality() == 0)
+                {
+                    filterData.document.add(new StringField(StoredFilterUtils.STORED_FILTER_NODOCS_SEGMENTS_FIELD_NAME, segment, Field.Store.YES));
+                    continue;
+                }
 
                 docsOutput.length = 0;
                 docs.write(docsOutput);
@@ -217,13 +215,26 @@ public class StoredFilterManager {
     }
 
     public class StoredFilterMerge extends MergePolicy.OneMerge {
+        private MergePolicy.OneMerge in;
+
         public StoredFilterMerge(MergePolicy.OneMerge in) {
             super(in.segments);
+            this.in = in;
         }
 
         @Override
         public CodecReader wrapForMerge(CodecReader reader) throws IOException {
             return new StoredFilterCodecReader(reader);
+        }
+
+        @Override
+        public int hashCode() {
+            return in.hashCode();
+        }
+
+        @Override
+        public boolean equals(Object obj) {
+            return super.equals(obj) || in.equals(obj);
         }
     }
 
@@ -238,6 +249,11 @@ public class StoredFilterManager {
 
         public CodecReader unwrap() {
             return in;
+        }
+
+        @Override
+        public FieldInfos getFieldInfos() {
+            return super.getFieldInfos();
         }
 
         @Override

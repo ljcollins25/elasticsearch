@@ -21,7 +21,7 @@ public class StoredFilterUtils {
 
     // These fields are 'attached' to normal documents
 
-
+    public static final String STORED_FILTER_TERM_PLACEHOLDER = "|";
 
     // The name of the field containing stored filter terms for normal documents
     // which have been merged into the segment
@@ -36,8 +36,11 @@ public class StoredFilterUtils {
     // TODO: stored filters are added
     public static final String STORED_FILTER_NAME_FIELD_NAME = "_stored_filter_name";
 
-    // The field for the name of the segment
+    // The field for the name of the segment with matching documents
     public static final String STORED_FILTER_SEGMENTS_FIELD_NAME = "_stored_filter_segments";
+
+    // The field for the name of the segment with no matching documents (these fields are only for debugging purposes)
+    public static final String STORED_FILTER_NODOCS_SEGMENTS_FIELD_NAME = "_stored_filter_nodocs_segments";
 
     // The field for the document filter for a segment
     public static final String STORED_FILTER_DOCS_FIELD_NAME = "_stored_filter_docs";
@@ -83,7 +86,7 @@ public class StoredFilterUtils {
 
                     @Override
                     public void collect(int doc) throws IOException {
-                        Document storedFilterDocument = searcher.doc(doc);
+                        Document storedFilterDocument = context.reader().document(doc);
                         IndexableField filterNameField = storedFilterDocument.getField(StoredFilterUtils.STORED_FILTER_NAME_FIELD_NAME);
                         Text filterName = new Text(filterNameField.stringValue());
                         IndexableField[] segmentsFields = storedFilterDocument.getFields(StoredFilterUtils.STORED_FILTER_SEGMENTS_FIELD_NAME);

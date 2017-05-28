@@ -14,14 +14,14 @@ import java.util.List;
  */
 public class StoredFilterDataFields extends Fields {
 
-    private final static StoredFilterData[] EMPTY_ARRAY = new StoredFilterData[0];
+    private final static StoredFilterDocsProvider[] EMPTY_ARRAY = new StoredFilterDocsProvider[0];
 
     // This list only contains a single element for StoredFilterUtils.STORED_FILTER_TERM_FIELD_NAME
     // It is only here to provide an iterator to pass out for iterator()
     private List<String> filterFieldName;
     private LeafReader reader;
     private IndexSearcher leafSearcher;
-    private StoredFilterData[] storedFilterDatas;
+    private StoredFilterDocsProvider[] storedFilterDatas;
 
     // TODO: Call this during merge by replacing fields (ie FieldsProducer) for segment with a multi field including this
     // TODO: Should the doc id set be cached between instances? No. A segment should only be merging in one place a time.
@@ -76,7 +76,7 @@ public class StoredFilterDataFields extends Fields {
 
     @Override
     public Terms terms(String field) throws IOException {
-        if (field != StoredFilterUtils.STORED_FILTER_TERM_FIELD_NAME)
+        if (!StoredFilterUtils.STORED_FILTER_TERM_FIELD_NAME.equals(field))
         {
             return null;
         }
@@ -139,11 +139,11 @@ public class StoredFilterDataFields extends Fields {
 
     private class FilterDataTermsEnum extends TermsEnum {
         private int currentTermOrd = -1;
-        private StoredFilterData current;
+        private StoredFilterDocsProvider current;
 
         @Override
         public PostingsEnum postings(PostingsEnum reuse, int flags) throws IOException {
-            return new DocIdSetPostingsEnum(getFilterDocs(current.filter));
+            return new DocIdSetPostingsEnum(current.getStoredFilterDocs(leafSearcher));
         }
 
         @Override
@@ -194,8 +194,8 @@ public class StoredFilterDataFields extends Fields {
         int compare(int ord, BytesRef other) {
             final byte[] otherBytes = other.bytes;
 
-            StoredFilterData storedFilterData = storedFilterDatas[ord];
-            BytesRef termBytes = storedFilterData.filterNameBytes;
+            StoredFilterDocsProvider storedFilterData = storedFilterDatas[ord];
+            BytesRef termBytes = storedFilterData.filterTerm();
             int upto = termBytes.offset;
             final int termLen = termBytes.length;
             int otherUpto = other.offset;
@@ -249,7 +249,7 @@ public class StoredFilterDataFields extends Fields {
         @Override
         public BytesRef term() throws IOException {
             if (current == null) return null;
-            else return current.filterNameBytes;
+            else return current.filterTerm();
         }
 
         @Override
