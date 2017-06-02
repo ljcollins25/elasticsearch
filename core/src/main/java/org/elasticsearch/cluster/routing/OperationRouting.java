@@ -223,6 +223,7 @@ public class OperationRouting extends AbstractComponent {
         if (routing == null) {
             hash = Murmur3HashFunction.hash(id);
         } else {
+            // TODO: Allow special routing prefix which allows specifying the specific shard to route to.
             hash = Murmur3HashFunction.hash(routing);
         }
         // we don't use IMD#getNumberOfShards since the index might have been shrunk such that we need to use the size
