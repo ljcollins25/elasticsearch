@@ -46,6 +46,7 @@ import org.elasticsearch.index.analysis.IndexAnalyzers;
 import org.elasticsearch.index.mapper.Mapper.BuilderContext;
 import org.elasticsearch.index.query.QueryShardContext;
 import org.elasticsearch.index.similarity.SimilarityService;
+import org.elasticsearch.index.storedfilters.StoredFilterRegistry;
 import org.elasticsearch.indices.InvalidTypeNameException;
 import org.elasticsearch.indices.TypeMissingException;
 import org.elasticsearch.indices.mapper.MapperRegistry;
@@ -140,6 +141,8 @@ public class MapperService extends AbstractIndexComponent implements Closeable {
     private volatile Set<String> parentTypes = emptySet();
 
     final MapperRegistry mapperRegistry;
+
+    public final StoredFilterRegistry storedFilterRegistry = new StoredFilterRegistry();
 
     public MapperService(IndexSettings indexSettings, IndexAnalyzers indexAnalyzers, NamedXContentRegistry xContentRegistry,
                          SimilarityService similarityService, MapperRegistry mapperRegistry,

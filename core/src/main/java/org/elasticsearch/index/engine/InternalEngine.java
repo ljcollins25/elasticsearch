@@ -63,6 +63,7 @@ import org.elasticsearch.index.IndexSettings;
 import org.elasticsearch.index.VersionType;
 import org.elasticsearch.index.mapper.IdFieldMapper;
 import org.elasticsearch.index.mapper.ParseContext;
+import org.elasticsearch.index.mapper.Uid;
 import org.elasticsearch.index.mapper.UidFieldMapper;
 import org.elasticsearch.index.merge.MergeStats;
 import org.elasticsearch.index.merge.OnGoingMerge;
@@ -72,6 +73,8 @@ import org.elasticsearch.index.seqno.SequenceNumbersService;
 import org.elasticsearch.index.shard.ElasticsearchMergePolicy;
 import org.elasticsearch.index.shard.ShardId;
 import org.elasticsearch.index.shard.TranslogRecoveryPerformer;
+import org.elasticsearch.index.storedfilters.StoredFilterManager;
+import org.elasticsearch.index.storedfilters.StoredFilterUtils;
 import org.elasticsearch.index.translog.Translog;
 import org.elasticsearch.index.translog.TranslogConfig;
 import org.elasticsearch.index.translog.TranslogCorruptedException;
@@ -129,6 +132,8 @@ public class InternalEngine extends Engine {
     private final String uidField;
 
     private final CombinedDeletionPolicy deletionPolicy;
+
+    private StoredFilterManager storedFilterManager;
 
     // How many callers are currently requesting index throttling.  Currently there are only two situations where we do this: when merges
     // are falling behind and when writing indexing buffer to disk is too slow.  When this is 0, there is no throttling, else we throttling
@@ -190,6 +195,7 @@ public class InternalEngine extends Engine {
                 logger.trace("recovered [{}]", seqNoStats);
                 seqNoService = sequenceNumberService(shardId, engineConfig.getIndexSettings(), seqNoStats);
                 updateMaxUnsafeAutoIdTimestampFromWriter(writer);
+                storedFilterManager = new StoredFilterManager(writer, this);
                 indexWriter = writer;
                 translog = openTranslog(engineConfig, writer, translogDeletionPolicy, () -> seqNoService().getGlobalCheckpoint());
                 assert translog.getGeneration() != null;
@@ -740,7 +746,10 @@ public class InternalEngine extends Engine {
         index.parsedDoc().updateSeqID(plan.seqNoForIndexing, index.primaryTerm());
         index.parsedDoc().version().setLongValue(plan.versionForIndexing);
         try {
-            if (plan.useLuceneUpdateDocument) {
+            ParseContext.Document doc = index.docs().get(0);
+            if (StoredFilterUtils.STORED_FILTER_TYPE.equals(index.type())) {
+                storedFilterManager.registerStoredFilter(index, plan.useLuceneUpdateDocument);
+            } else if (plan.useLuceneUpdateDocument) {
                 update(index.uid(), index.docs(), indexWriter);
             } else {
                 // document does not exists, we can optimize for create, but double check if assertions are running
@@ -1699,7 +1708,14 @@ public class InternalEngine extends Engine {
         }
 
         @Override
+        protected void doMerge(IndexWriter writer, MergePolicy.OneMerge merge) throws IOException {
+            merge = storedFilterManager.wrapMerge(merge);
+            super.doMerge(writer, merge);
+        }
+
+        @Override
         public synchronized void beforeMerge(OnGoingMerge merge) {
+            storedFilterManager.mergeStarted(merge);
             int maxNumMerges = mergeScheduler.getMaxMergeCount();
             if (numMergesInFlight.incrementAndGet() > maxNumMerges) {
                 if (isThrottling.getAndSet(true) == false) {
@@ -1711,6 +1727,7 @@ public class InternalEngine extends Engine {
 
         @Override
         public synchronized void afterMerge(OnGoingMerge merge) {
+            storedFilterManager.mergeCompleted(merge);
             int maxNumMerges = mergeScheduler.getMaxMergeCount();
             if (numMergesInFlight.decrementAndGet() < maxNumMerges) {
                 if (isThrottling.getAndSet(false)) {

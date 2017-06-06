@@ -19,14 +19,9 @@
 
 package org.elasticsearch.index.mapper;
 
+import org.apache.lucene.codecs.PostingsFormat;
 import org.apache.lucene.document.FieldType;
-import org.apache.lucene.index.FieldInfo;
-import org.apache.lucene.index.IndexOptions;
-import org.apache.lucene.index.IndexReader;
-import org.apache.lucene.index.MultiFields;
-import org.apache.lucene.index.PrefixCodedTerms;
-import org.apache.lucene.index.Term;
-import org.apache.lucene.index.Terms;
+import org.apache.lucene.index.*;
 import org.apache.lucene.index.PrefixCodedTerms.TermIterator;
 import org.apache.lucene.search.BooleanClause.Occur;
 import org.apache.lucene.search.BooleanQuery;
@@ -97,6 +92,10 @@ public abstract class MappedFieldType extends FieldType {
 
     @Override
     public abstract MappedFieldType clone();
+
+    public PostingsFormat fieldPostingsFormat() { return null; }
+
+    public Terms extendFieldTerms(Terms terms, SegmentWriteState state) throws IOException { return terms; }
 
     /** Return a fielddata builder for this field
      *  @throws IllegalArgumentException if the fielddata is not supported on this type.

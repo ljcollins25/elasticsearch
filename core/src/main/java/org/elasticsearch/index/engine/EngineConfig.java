@@ -37,6 +37,7 @@ import org.elasticsearch.index.codec.CodecService;
 import org.elasticsearch.index.shard.ShardId;
 import org.elasticsearch.index.shard.TranslogRecoveryPerformer;
 import org.elasticsearch.index.store.Store;
+import org.elasticsearch.index.storedfilters.StoredFilterRegistry;
 import org.elasticsearch.index.translog.TranslogConfig;
 import org.elasticsearch.indices.IndexingMemoryController;
 import org.elasticsearch.threadpool.ThreadPool;
@@ -68,6 +69,8 @@ public final class EngineConfig {
     private final ReferenceManager.RefreshListener refreshListeners;
     @Nullable
     private final Sort indexSort;
+
+    private StoredFilterRegistry storedFilterRegistry;
 
     /**
      * Index setting to change the low level lucene codec used for writing new segments.
@@ -328,5 +331,14 @@ public final class EngineConfig {
      */
     public Sort getIndexSort() {
         return indexSort;
+    }
+
+    public EngineConfig withStoredFilterRegistry(StoredFilterRegistry storedFilterRegistry) {
+        this.storedFilterRegistry = storedFilterRegistry;
+        return this;
+    }
+
+    public StoredFilterRegistry getStoredFilterRegistry() {
+        return storedFilterRegistry != null ? storedFilterRegistry : new StoredFilterRegistry();
     }
 }

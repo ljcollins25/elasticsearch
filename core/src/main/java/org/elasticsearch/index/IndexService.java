@@ -60,6 +60,7 @@ import org.elasticsearch.index.shard.ShardPath;
 import org.elasticsearch.index.similarity.SimilarityService;
 import org.elasticsearch.index.store.IndexStore;
 import org.elasticsearch.index.store.Store;
+import org.elasticsearch.index.storedfilters.StoredFilterRegistry;
 import org.elasticsearch.index.translog.Translog;
 import org.elasticsearch.indices.breaker.CircuitBreakerService;
 import org.elasticsearch.indices.cluster.IndicesClusterStateService;
@@ -467,7 +468,7 @@ public class IndexService extends AbstractIndexComponent implements IndicesClust
             shardId, indexSettings, indexCache.bitsetFilterCache(), indexFieldData, mapperService(),
                 similarityService(), scriptService, xContentRegistry,
                 client, indexReader,
-            nowInMillis);
+            nowInMillis).withStoredFilterRegistry(mapperService.storedFilterRegistry);
     }
 
     /**

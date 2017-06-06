@@ -47,6 +47,8 @@ import org.elasticsearch.index.mapper.RoutingFieldMapper;
 import org.elasticsearch.index.mapper.ScaledFloatFieldMapper;
 import org.elasticsearch.index.mapper.SeqNoFieldMapper;
 import org.elasticsearch.index.mapper.SourceFieldMapper;
+import org.elasticsearch.index.mapper.StoredFilterQueryFieldMapper;
+import org.elasticsearch.index.mapper.StoredFilterTermFieldMapper;
 import org.elasticsearch.index.mapper.TextFieldMapper;
 import org.elasticsearch.index.mapper.TokenCountFieldMapper;
 import org.elasticsearch.index.mapper.TypeFieldMapper;
@@ -108,6 +110,7 @@ public class IndicesModule extends AbstractModule {
         mappers.put(ObjectMapper.CONTENT_TYPE, new ObjectMapper.TypeParser());
         mappers.put(ObjectMapper.NESTED_CONTENT_TYPE, new ObjectMapper.TypeParser());
         mappers.put(CompletionFieldMapper.CONTENT_TYPE, new CompletionFieldMapper.TypeParser());
+        mappers.put(StoredFilterQueryFieldMapper.CONTENT_TYPE, new StoredFilterQueryFieldMapper.TypeParser());
         mappers.put(GeoPointFieldMapper.CONTENT_TYPE, new GeoPointFieldMapper.TypeParser());
         if (ShapesAvailability.JTS_AVAILABLE && ShapesAvailability.SPATIAL4J_AVAILABLE) {
             mappers.put(GeoShapeFieldMapper.CONTENT_TYPE, new GeoShapeFieldMapper.TypeParser());
@@ -138,6 +141,7 @@ public class IndicesModule extends AbstractModule {
         metadataMappers.put(TypeFieldMapper.NAME, new TypeFieldMapper.TypeParser());
         metadataMappers.put(AllFieldMapper.NAME, new AllFieldMapper.TypeParser());
         metadataMappers.put(VersionFieldMapper.NAME, new VersionFieldMapper.TypeParser());
+        metadataMappers.put(StoredFilterTermFieldMapper.NAME, new StoredFilterTermFieldMapper.TypeParser());
         metadataMappers.put(ParentFieldMapper.NAME, new ParentFieldMapper.TypeParser());
         metadataMappers.put(SeqNoFieldMapper.NAME, new SeqNoFieldMapper.TypeParser());
         // _field_names is not registered here, see below

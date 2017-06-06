@@ -48,7 +48,10 @@ import org.elasticsearch.index.mapper.MapperService;
 import org.elasticsearch.index.mapper.ObjectMapper;
 import org.elasticsearch.index.mapper.TextFieldMapper;
 import org.elasticsearch.index.query.support.NestedScope;
+import org.elasticsearch.index.shard.ShardId;
 import org.elasticsearch.index.similarity.SimilarityService;
+import org.elasticsearch.index.storedfilters.StoredFilterManager;
+import org.elasticsearch.index.storedfilters.StoredFilterRegistry;
 import org.elasticsearch.script.ExecutableScript;
 import org.elasticsearch.script.Script;
 import org.elasticsearch.script.ScriptContext;
@@ -96,6 +99,8 @@ public class QueryShardContext extends QueryRewriteContext {
     private NestedScope nestedScope;
     private boolean isFilter;
 
+    private StoredFilterRegistry storedFilterRegistry;
+
     public QueryShardContext(int shardId, IndexSettings indexSettings, BitsetFilterCache bitsetFilterCache,
             IndexFieldDataService indexFieldDataService, MapperService mapperService, SimilarityService similarityService,
             ScriptService scriptService, NamedXContentRegistry xContentRegistry,
@@ -117,6 +122,7 @@ public class QueryShardContext extends QueryRewriteContext {
                 source.similarityService, source.scriptService, source.getXContentRegistry(), source.client,
                 source.reader, source.nowInMillis);
         this.types = source.getTypes();
+        this.storedFilterRegistry = source.storedFilterRegistry;
     }
 
     private void reset() {
@@ -429,5 +435,15 @@ public class QueryShardContext extends QueryRewriteContext {
     public Client getClient() {
         failIfFrozen(); // we somebody uses a terms filter with lookup for instance can't be cached...
         return super.getClient();
+    }
+
+    public QueryShardContext withStoredFilterRegistry(StoredFilterRegistry storedFilterRegistry) {
+        this.storedFilterRegistry = storedFilterRegistry;
+        return this;
+    }
+
+    public StoredFilterManager getStoredFilterManager() {
+        assert storedFilterRegistry != null;
+        return storedFilterRegistry.getShardManager(shardId);
     }
 }
