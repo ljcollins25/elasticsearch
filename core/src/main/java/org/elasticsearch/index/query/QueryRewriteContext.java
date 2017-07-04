@@ -76,6 +76,11 @@ public class QueryRewriteContext {
         return mapperService;
     }
 
+    /** Return the script service to allow compiling scripts within queries. */
+    public ScriptService getScriptService() {
+        return scriptService;
+    }
+
     /** Return the current {@link IndexReader}, or {@code null} if no index reader is available, for
      *  instance if we are on the coordinating node or if this rewrite context is used to index
      *  queries (percolation). */
@@ -88,13 +93,6 @@ public class QueryRewriteContext {
      */
     public NamedXContentRegistry getXContentRegistry() {
         return xContentRegistry;
-    }
-
-    /**
-     * Returns a new {@link QueryParseContext} that wraps the provided parser.
-     */
-    public QueryParseContext newParseContext(XContentParser parser) {
-        return new QueryParseContext(parser);
     }
 
     public long nowInMillis() {

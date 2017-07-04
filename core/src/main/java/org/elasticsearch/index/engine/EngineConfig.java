@@ -35,12 +35,15 @@ import org.elasticsearch.common.unit.TimeValue;
 import org.elasticsearch.index.IndexSettings;
 import org.elasticsearch.index.codec.CodecService;
 import org.elasticsearch.index.shard.ShardId;
-import org.elasticsearch.index.shard.TranslogRecoveryPerformer;
 import org.elasticsearch.index.store.Store;
 import org.elasticsearch.index.storedfilters.StoredFilterRegistry;
+import org.elasticsearch.index.translog.Translog;
 import org.elasticsearch.index.translog.TranslogConfig;
 import org.elasticsearch.indices.IndexingMemoryController;
 import org.elasticsearch.threadpool.ThreadPool;
+
+import java.io.IOException;
+import java.util.List;
 
 /*
  * Holds all the configuration that is used to create an {@link Engine}.
@@ -49,7 +52,6 @@ import org.elasticsearch.threadpool.ThreadPool;
  */
 public final class EngineConfig {
     private final ShardId shardId;
-    private final TranslogRecoveryPerformer translogRecoveryPerformer;
     private final IndexSettings indexSettings;
     private final ByteSizeValue indexingBufferSize;
     private volatile boolean enableGcDeletes = true;
@@ -66,9 +68,10 @@ public final class EngineConfig {
     private final QueryCache queryCache;
     private final QueryCachingPolicy queryCachingPolicy;
     @Nullable
-    private final ReferenceManager.RefreshListener refreshListeners;
+    private final List<ReferenceManager.RefreshListener> refreshListeners;
     @Nullable
     private final Sort indexSort;
+    private final TranslogRecoveryRunner translogRecoveryRunner;
 
     private StoredFilterRegistry storedFilterRegistry;
 
@@ -113,9 +116,9 @@ public final class EngineConfig {
                         IndexSettings indexSettings, Engine.Warmer warmer, Store store,
                         MergePolicy mergePolicy, Analyzer analyzer,
                         Similarity similarity, CodecService codecService, Engine.EventListener eventListener,
-                        TranslogRecoveryPerformer translogRecoveryPerformer, QueryCache queryCache, QueryCachingPolicy queryCachingPolicy,
-                        TranslogConfig translogConfig, TimeValue flushMergesAfter, ReferenceManager.RefreshListener refreshListeners,
-                        Sort indexSort) {
+                        QueryCache queryCache, QueryCachingPolicy queryCachingPolicy,
+                        TranslogConfig translogConfig, TimeValue flushMergesAfter, List<ReferenceManager.RefreshListener> refreshListeners,
+                        Sort indexSort, TranslogRecoveryRunner translogRecoveryRunner) {
         if (openMode == null) {
             throw new IllegalArgumentException("openMode must not be null");
         }
@@ -134,7 +137,6 @@ public final class EngineConfig {
         // there are not too many shards allocated to this node.  Instead, IndexingMemoryController periodically checks
         // and refreshes the most heap-consuming shards when total indexing heap usage across all shards is too high:
         indexingBufferSize = new ByteSizeValue(256, ByteSizeUnit.MB);
-        this.translogRecoveryPerformer = translogRecoveryPerformer;
         this.queryCache = queryCache;
         this.queryCachingPolicy = queryCachingPolicy;
         this.translogConfig = translogConfig;
@@ -142,6 +144,7 @@ public final class EngineConfig {
         this.openMode = openMode;
         this.refreshListeners = refreshListeners;
         this.indexSort = indexSort;
+        this.translogRecoveryRunner = translogRecoveryRunner;
     }
 
     /**
@@ -255,15 +258,6 @@ public final class EngineConfig {
     }
 
     /**
-     * Returns the {@link org.elasticsearch.index.shard.TranslogRecoveryPerformer} for this engine. This class is used
-     * to apply transaction log operations to the engine. It encapsulates all the logic to transfer the translog entry into
-     * an indexing operation.
-     */
-    public TranslogRecoveryPerformer getTranslogRecoveryPerformer() {
-        return translogRecoveryPerformer;
-    }
-
-    /**
      * Return the cache to use for queries.
      */
     public QueryCache getQueryCache() {
@@ -298,6 +292,18 @@ public final class EngineConfig {
         return openMode;
     }
 
+    @FunctionalInterface
+    public interface TranslogRecoveryRunner {
+        int run(Engine engine, Translog.Snapshot snapshot) throws IOException;
+    }
+
+    /**
+     * Returns a runner that implements the translog recovery from the given snapshot
+     */
+    public TranslogRecoveryRunner getTranslogRecoveryRunner() {
+        return translogRecoveryRunner;
+    }
+
     /**
      * Engine open mode defines how the engine should be opened or in other words what the engine should expect
      * to recover from. We either create a brand new engine with a new index and translog or we recover from an existing index.
@@ -313,9 +319,9 @@ public final class EngineConfig {
     }
 
     /**
-     * {@linkplain ReferenceManager.RefreshListener} instance to configure.
+     * The refresh listeners to add to Lucene
      */
-    public ReferenceManager.RefreshListener getRefreshListeners() {
+    public List<ReferenceManager.RefreshListener> getRefreshListeners() {
         return refreshListeners;
     }
 
