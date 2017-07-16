@@ -19,6 +19,7 @@
 
 package org.elasticsearch.index.mapper;
 
+import org.apache.lucene.codecs.PostingsFormat;
 import org.apache.lucene.document.FieldType;
 import org.apache.lucene.index.FieldInfo;
 import org.apache.lucene.index.IndexOptions;
@@ -97,6 +98,10 @@ public abstract class MappedFieldType extends FieldType {
 
     @Override
     public abstract MappedFieldType clone();
+
+    public PostingsFormat fieldPostingsFormat() { return null; }
+
+    public Terms extendFieldTerms(Terms terms, SegmentWriteState state) throws IOException { return terms; }
 
     /** Return a fielddata builder for this field
      *  @throws IllegalArgumentException if the fielddata is not supported on this type.

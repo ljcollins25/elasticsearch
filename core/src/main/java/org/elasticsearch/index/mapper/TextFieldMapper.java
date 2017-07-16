@@ -19,9 +19,16 @@
 
 package org.elasticsearch.index.mapper;
 
+import org.apache.lucene.codecs.PostingsFormat;
+import org.apache.lucene.codecs.autoprefix.AutoPrefixPostingsFormat;
+import org.apache.lucene.codecs.autoprefix.AutoPrefixQuery;
+import org.apache.lucene.codecs.autoprefix.AutoPrefixTermsBuilder;
 import org.apache.lucene.document.Field;
 import org.apache.lucene.index.IndexOptions;
 import org.apache.lucene.index.IndexableField;
+import org.apache.lucene.index.SegmentWriteState;
+import org.apache.lucene.index.Term;
+import org.apache.lucene.index.Terms;
 import org.apache.lucene.search.Query;
 import org.elasticsearch.common.settings.Settings;
 import org.elasticsearch.common.xcontent.XContentBuilder;
@@ -29,6 +36,7 @@ import org.elasticsearch.common.xcontent.support.XContentMapValues;
 import org.elasticsearch.index.analysis.NamedAnalyzer;
 import org.elasticsearch.index.fielddata.IndexFieldData;
 import org.elasticsearch.index.fielddata.plain.PagedBytesIndexFieldData;
+import org.elasticsearch.index.query.QueryShardContext;
 
 import java.io.IOException;
 import java.util.Iterator;
@@ -89,6 +97,11 @@ public class TextFieldMapper extends FieldMapper {
             return builder;
         }
 
+        public Builder usePrefix(boolean usePrefix) {
+            fieldType().setUsePrefix(usePrefix);
+            return builder;
+        }
+
         @Override
         public Builder docValues(boolean docValues) {
             if (docValues) {
@@ -143,6 +156,9 @@ public class TextFieldMapper extends FieldMapper {
                     int newPositionIncrementGap = XContentMapValues.nodeIntegerValue(propNode, -1);
                     builder.positionIncrementGap(newPositionIncrementGap);
                     iterator.remove();
+                } else if (propName.equals("use_prefix")) {
+                    builder.usePrefix(XContentMapValues.nodeBooleanValue(propNode));
+                    iterator.remove();
                 } else if (propName.equals("fielddata")) {
                     builder.fielddata(XContentMapValues.nodeBooleanValue(propNode, "fielddata"));
                     iterator.remove();
@@ -169,10 +185,12 @@ public class TextFieldMapper extends FieldMapper {
         private double fielddataMinFrequency;
         private double fielddataMaxFrequency;
         private int fielddataMinSegmentSize;
+        private boolean usePrefix;
 
         public TextFieldType() {
             setTokenized(true);
             fielddata = false;
+            usePrefix = false;
             fielddataMinFrequency = Defaults.FIELDDATA_MIN_FREQUENCY;
             fielddataMaxFrequency = Defaults.FIELDDATA_MAX_FREQUENCY;
             fielddataMinSegmentSize = Defaults.FIELDDATA_MIN_SEGMENT_SIZE;
@@ -181,6 +199,7 @@ public class TextFieldMapper extends FieldMapper {
         protected TextFieldType(TextFieldType ref) {
             super(ref);
             this.fielddata = ref.fielddata;
+            this.usePrefix = ref.usePrefix;
             this.fielddataMinFrequency = ref.fielddataMinFrequency;
             this.fielddataMaxFrequency = ref.fielddataMaxFrequency;
             this.fielddataMinSegmentSize = ref.fielddataMinSegmentSize;
@@ -199,7 +218,27 @@ public class TextFieldMapper extends FieldMapper {
             return fielddata == that.fielddata
                     && fielddataMinFrequency == that.fielddataMinFrequency
                     && fielddataMaxFrequency == that.fielddataMaxFrequency
-                    && fielddataMinSegmentSize == that.fielddataMinSegmentSize;
+                    && fielddataMinSegmentSize == that.fielddataMinSegmentSize
+                    && usePrefix == that.usePrefix;
+        }
+
+        @Override
+        public Query termQuery(Object value, QueryShardContext context) {
+            if (usePrefix) {
+                failIfNotIndexed();
+                AutoPrefixQuery query = new AutoPrefixQuery(new Term(name(), indexedValueForSearch(value)));
+                return query;
+            }
+            return super.termQuery(value, context);
+        }
+
+        @Override
+        public Terms extendFieldTerms(Terms terms, SegmentWriteState state) throws IOException {
+            if (usePrefix) {
+                return new AutoPrefixTermsBuilder(state, terms).build();
+            }
+
+            return super.extendFieldTerms(terms, state);
         }
 
         @Override
@@ -230,7 +269,20 @@ public class TextFieldMapper extends FieldMapper {
                     conflicts.add("mapper [" + name() + "] is used by multiple types. Set update_all_types to true to update "
                             + "[fielddata_frequency_filter.min_segment_size] across all types.");
                 }
+                if (usePrefix() != otherType.usePrefix()) {
+                    conflicts.add("mapper [" + name() + "] is used by multiple types. Set update_all_types to true to update [use_prefix] "
+                        + "across all types.");
+                }
             }
+        }
+
+        public boolean usePrefix() {
+            return usePrefix;
+        }
+
+        public void setUsePrefix(boolean usePrefix) {
+            checkIfFrozen();
+            this.usePrefix = usePrefix;
         }
 
         public boolean fielddata() {
@@ -371,6 +423,10 @@ public class TextFieldMapper extends FieldMapper {
             builder.field("include_in_all", includeInAll);
         } else if (includeDefaults) {
             builder.field("include_in_all", true);
+        }
+
+        if (includeDefaults || fieldType().usePrefix()) {
+            builder.field("use_prefix", fieldType().usePrefix());
         }
 
         if (includeDefaults || positionIncrementGap != POSITION_INCREMENT_GAP_USE_ANALYZER) {

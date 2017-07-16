@@ -72,6 +72,7 @@ import org.elasticsearch.index.seqno.SequenceNumbers;
 import org.elasticsearch.index.seqno.SequenceNumbersService;
 import org.elasticsearch.index.shard.ElasticsearchMergePolicy;
 import org.elasticsearch.index.shard.ShardId;
+import org.elasticsearch.index.storedfilters.StoredFilterUtils;
 import org.elasticsearch.index.translog.Translog;
 import org.elasticsearch.index.translog.TranslogConfig;
 import org.elasticsearch.index.translog.TranslogCorruptedException;
@@ -746,6 +747,11 @@ public class InternalEngine extends Engine {
         index.parsedDoc().updateSeqID(plan.seqNoForIndexing, index.primaryTerm());
         index.parsedDoc().version().setLongValue(plan.versionForIndexing);
         try {
+			ParseContext.Document doc = index.docs().get(0);
+            if (StoredFilterUtils.STORED_FILTER_TYPE.equals(index.type())) {
+                StoredFilterUtils.registerStoredFilter(this, index, plan.useLuceneUpdateDocument);
+            }
+
             if (plan.useLuceneUpdateDocument) {
                 update(index.uid(), index.docs(), indexWriter);
             } else {

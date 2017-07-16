@@ -250,8 +250,25 @@ public class OperationRouting extends AbstractComponent {
         return calculateScaledShardId(indexMetaData, effectiveRouting, partitionOffset);
     }
 
+    private static final String DIRECT_ROUTING_PREFIX = "!~#";
+
     private static int calculateScaledShardId(IndexMetaData indexMetaData, String effectiveRouting, int partitionOffset) {
-        final int hash = Murmur3HashFunction.hash(effectiveRouting) + partitionOffset;
+        int hash = 0;
+        boolean hasDirectRouting = false;
+
+        if (effectiveRouting.startsWith(DIRECT_ROUTING_PREFIX)) {
+            try {
+                // Special routing prefix which allows using numeric value to directly reference a shard
+                hash = Integer.parseUnsignedInt(effectiveRouting.substring(DIRECT_ROUTING_PREFIX.length()));
+                hasDirectRouting = true;
+            } catch (NumberFormatException ex) {
+                // It wasn't a number so just treat it as a normal routing to be hashed
+            }
+        }
+
+        if (!hasDirectRouting) {
+            hash = Murmur3HashFunction.hash(effectiveRouting) + partitionOffset;
+        }
 
         // we don't use IMD#getNumberOfShards since the index might have been shrunk such that we need to use the size
         // of original index to hash documents
