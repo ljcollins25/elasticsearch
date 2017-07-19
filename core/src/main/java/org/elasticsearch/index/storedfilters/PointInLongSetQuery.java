@@ -103,11 +103,6 @@ public class PointInLongSetQuery {
         };
     }
 
-    @Override
-    public boolean equals(Object obj) {
-        return false;
-    }
-
     /** Essentially does a merge sort, only collecting hits when the indexed point and query point are the same.  This is an optimization,
      *  used in the 1D case. */
     private class MergePointVisitor implements IntersectVisitor {

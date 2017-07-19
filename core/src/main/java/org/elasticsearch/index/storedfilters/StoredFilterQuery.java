@@ -69,8 +69,9 @@ public final class StoredFilterQuery extends Query {
             return getEmptyWeight();
         }
 
-        PointInLongSetQuery subQuery = new PointInLongSetQuery(StoredFilterUtils.STORED_FILTER_SEQ_NOS_FIELD_NAME,
-        StoredFilterUtils.loadSequenceNumbersField(searcher, filterDocMatch.scoreDocs[0].doc));
+        PointInLongSetQuery subQuery = new PointInLongSetQuery(
+            StoredFilterUtils.STORED_FILTER_SEQ_NOS_FIELD_NAME,
+            StoredFilterUtils.loadSequenceNumbersField(searcher, filterDocMatch.scoreDocs[0].doc));
 
         return subQuery.createWeight(this, searcher, needsScores, boost);
     }

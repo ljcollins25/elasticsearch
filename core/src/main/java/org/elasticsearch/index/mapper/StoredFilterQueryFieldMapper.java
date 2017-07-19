@@ -40,7 +40,6 @@ import org.elasticsearch.common.xcontent.XContentParser;
 import org.elasticsearch.index.fielddata.IndexFieldData;
 import org.elasticsearch.index.fielddata.plain.BytesBinaryDVIndexFieldData;
 import org.elasticsearch.index.query.QueryBuilder;
-import org.elasticsearch.index.query.QueryParseContext;
 import org.elasticsearch.index.query.QueryShardContext;
 import org.elasticsearch.index.query.QueryShardException;
 import org.elasticsearch.index.storedfilters.StoredFilterUtils;
@@ -52,6 +51,7 @@ import java.util.List;
 import java.util.Map;
 
 import static org.elasticsearch.index.mapper.TypeParsers.parseField;
+import static org.elasticsearch.index.query.AbstractQueryBuilder.parseInnerQueryBuilder;
 
 /**
  *
@@ -144,8 +144,9 @@ public class StoredFilterQueryFieldMapper extends FieldMapper {
 
         XContentParser parser = context.parser();
         QueryBuilder queryBuilder = parseQueryBuilder(
-            queryShardContext.newParseContext(parser), parser.getTokenLocation()
+            parser, parser.getTokenLocation()
         );
+
         //verifyQuery(queryBuilder);
         // Fetching of terms, shapes and indexed scripts happen during this rewrite:
         queryBuilder = queryBuilder.rewrite(queryShardContext);
@@ -175,9 +176,9 @@ public class StoredFilterQueryFieldMapper extends FieldMapper {
         return queryBuilder.toQuery(context);
     }
 
-    private static QueryBuilder parseQueryBuilder(QueryParseContext context, XContentLocation location) {
+    private static QueryBuilder parseQueryBuilder(XContentParser parser, XContentLocation location) {
         try {
-            return context.parseInnerQueryBuilder();
+            return parseInnerQueryBuilder(parser);
         } catch (IOException e) {
             throw new ParsingException(location, "Failed to parse", e);
         }
