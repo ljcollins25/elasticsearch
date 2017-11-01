@@ -345,7 +345,7 @@ public class MetaDataCreateIndexService extends AbstractComponent {
                                 indexSettingsBuilder.put(SETTING_CREATION_DATE, new DateTime(DateTimeZone.UTC).getMillis());
                             }
                             indexSettingsBuilder.put(IndexMetaData.SETTING_INDEX_PROVIDED_NAME, request.getProvidedName());
-                            indexSettingsBuilder.put(SETTING_INDEX_UUID, UUIDs.randomBase64UUID());
+                            indexSettingsBuilder.put(SETTING_INDEX_UUID, request.index() + "_" + UUIDs.randomBase64UUID());
                             final IndexMetaData.Builder tmpImdBuilder = IndexMetaData.builder(request.index());
 
                             final int routingNumShards;

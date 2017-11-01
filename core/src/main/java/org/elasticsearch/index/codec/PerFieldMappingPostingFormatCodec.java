@@ -21,13 +21,27 @@ package org.elasticsearch.index.codec;
 
 import org.apache.logging.log4j.Logger;
 import org.apache.lucene.codecs.Codec;
+import org.apache.lucene.codecs.FieldsConsumer;
+import org.apache.lucene.codecs.FieldsProducer;
 import org.apache.lucene.codecs.PostingsFormat;
 import org.apache.lucene.codecs.lucene50.Lucene50StoredFieldsFormat;
 import org.apache.lucene.codecs.lucene70.Lucene70Codec;
+import org.apache.lucene.index.Fields;
+import org.apache.lucene.index.SegmentReadState;
+import org.apache.lucene.index.SegmentWriteState;
+import org.apache.lucene.index.Terms;
+import org.apache.lucene.util.IOUtils;
 import org.elasticsearch.common.lucene.Lucene;
 import org.elasticsearch.index.mapper.CompletionFieldMapper;
 import org.elasticsearch.index.mapper.MappedFieldType;
 import org.elasticsearch.index.mapper.MapperService;
+
+import static org.apache.lucene.index.FilterLeafReader.FilterFields;
+
+import java.io.Closeable;
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * {@link PerFieldMappingPostingFormatCodec This postings format} is the default
@@ -41,6 +55,8 @@ import org.elasticsearch.index.mapper.MapperService;
 public class PerFieldMappingPostingFormatCodec extends Lucene70Codec {
     private final Logger logger;
     private final MapperService mapperService;
+    private final PostingsFormat defaultPostingsFormat;
+    private final MappingPostingsFormat mappingPostingsFormat;
 
     static {
         assert Codec.forName(Lucene.LATEST_CODEC).getClass().isAssignableFrom(PerFieldMappingPostingFormatCodec.class) : "PerFieldMappingPostingFormatCodec must subclass the latest lucene codec: " + Lucene.LATEST_CODEC;
@@ -50,6 +66,9 @@ public class PerFieldMappingPostingFormatCodec extends Lucene70Codec {
         super(compressionMode);
         this.mapperService = mapperService;
         this.logger = logger;
+
+        defaultPostingsFormat = super.getPostingsFormatForField(null);
+        mappingPostingsFormat = new MappingPostingsFormat(defaultPostingsFormat);
     }
 
     @Override
@@ -60,7 +79,99 @@ public class PerFieldMappingPostingFormatCodec extends Lucene70Codec {
         } else if (fieldType instanceof CompletionFieldMapper.CompletionFieldType) {
             return CompletionFieldMapper.CompletionFieldType.postingsFormat();
         }
-        return super.getPostingsFormatForField(field);
+
+        final PostingsFormat fieldPostingsFormat = super.getPostingsFormatForField(field);
+        if (fieldPostingsFormat == defaultPostingsFormat)
+        {
+            return mappingPostingsFormat;
+        }
+
+        return fieldPostingsFormat;
     }
 
+    private class MappingPostingsFormat extends PostingsFormat {
+        private final PostingsFormat delegate;
+
+        public MappingPostingsFormat(PostingsFormat delegate) {
+            super(delegate.getName());
+
+            this.delegate = delegate;
+        }
+
+        @Override
+        public FieldsConsumer fieldsConsumer(SegmentWriteState state) throws IOException {
+            return new MappingFieldsConsumer(delegate.fieldsConsumer(state), state);
+        }
+
+        @Override
+        public FieldsProducer fieldsProducer(SegmentReadState state) throws IOException {
+
+            return delegate.fieldsProducer(state);
+        }
+    }
+
+    private class MappingFieldsConsumer extends FieldsConsumer {
+        private final SegmentWriteState state;
+        private final FieldsConsumer delegate;
+
+        public MappingFieldsConsumer(FieldsConsumer delegate, SegmentWriteState state)
+        {
+            this.delegate = delegate;
+            this.state = state;
+        }
+
+        @Override
+        public void write(Fields fields) throws IOException {
+            // Add or extend stored filter field
+
+            CloseableFields allFields = new CloseableFields(fields) {
+                Closeable closableTerms;
+
+                @Override
+                public Terms terms(String field) throws IOException {
+                    if (closableTerms != null) {
+                        closableTerms.close();
+                        closableTerms = null;
+                    }
+
+                    final MappedFieldType fieldType = mapperService.fullName(field);
+
+                    Terms terms = super.terms(field);
+                    if (fieldType != null) {
+                        terms = fieldType.extendFieldTerms(terms, state);
+                        if (terms instanceof Closeable)
+                        {
+                            closableTerms = (Closeable) terms;
+                        }
+                    }
+
+                    return terms;
+                }
+
+                @Override
+                public void close() throws IOException {
+                    if (closableTerms != null) {
+                        closableTerms.close();
+                    }
+                }
+            };
+
+            try {
+                delegate.write(allFields);
+            } finally {
+                allFields.close();
+            }
+        }
+
+        @Override
+        public void close() throws IOException {
+            IOUtils.close(delegate);
+        }
+    }
+
+    static abstract class CloseableFields extends FilterFields implements Closeable {
+        public CloseableFields(Fields in) {
+            super(in);
+        }
+    }
 }

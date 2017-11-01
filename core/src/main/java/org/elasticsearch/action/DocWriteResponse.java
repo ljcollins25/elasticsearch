@@ -55,6 +55,10 @@ public abstract class DocWriteResponse extends ReplicationResponse implements Wr
     private static final String _ID = "_id";
     private static final String _VERSION = "_version";
     private static final String _SEQ_NO = "_seq_no";
+    private static final String _SHARD_ID = "_shard_id";
+
+    // TODO: Assign stable id from sequence number
+    private static final String _STABLE_ID = "_stable_id";
     private static final String _PRIMARY_TERM = "_primary_term";
     private static final String RESULT = "result";
     private static final String FORCED_REFRESH = "forced_refresh";
@@ -296,6 +300,7 @@ public abstract class DocWriteResponse extends ReplicationResponse implements Wr
     public XContentBuilder innerToXContent(XContentBuilder builder, Params params) throws IOException {
         ReplicationResponse.ShardInfo shardInfo = getShardInfo();
         builder.field(_INDEX, shardId.getIndexName())
+                .field(_SHARD_ID, shardId.getId())
                 .field(_TYPE, type)
                 .field(_ID, id)
                 .field(_VERSION, version)

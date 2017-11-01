@@ -22,6 +22,7 @@ package org.elasticsearch.index.mapper;
 import org.apache.lucene.document.Field;
 import org.apache.lucene.document.LongPoint;
 import org.apache.lucene.document.NumericDocValuesField;
+import org.apache.lucene.document.SortedDocValuesField;
 import org.apache.lucene.index.DocValuesType;
 import org.apache.lucene.index.IndexableField;
 import org.apache.lucene.search.MatchNoDocsQuery;
@@ -66,27 +67,32 @@ public class SeqNoFieldMapper extends MetadataFieldMapper {
 
         public final Field seqNo;
         public final Field seqNoDocValue;
+        public final Field seqNoSortedDocValue;
         public final Field primaryTerm;
 
-        public SequenceIDFields(Field seqNo, Field seqNoDocValue, Field primaryTerm) {
+        public SequenceIDFields(Field seqNo, Field seqNoDocValue, Field primaryTerm, Field seqNoSortedDocValue) {
             Objects.requireNonNull(seqNo, "sequence number field cannot be null");
             Objects.requireNonNull(seqNoDocValue, "sequence number dv field cannot be null");
             Objects.requireNonNull(primaryTerm, "primary term field cannot be null");
+            Objects.requireNonNull(seqNoSortedDocValue, "sequence number sorted dv field cannot be null");
             this.seqNo = seqNo;
             this.seqNoDocValue = seqNoDocValue;
             this.primaryTerm = primaryTerm;
+            this.seqNoSortedDocValue = seqNoSortedDocValue;
         }
 
         public static SequenceIDFields emptySeqID() {
             return new SequenceIDFields(new LongPoint(NAME, SequenceNumbersService.UNASSIGNED_SEQ_NO),
                     new NumericDocValuesField(NAME, SequenceNumbersService.UNASSIGNED_SEQ_NO),
-                    new NumericDocValuesField(PRIMARY_TERM_NAME, 0));
+                    new NumericDocValuesField(PRIMARY_TERM_NAME, 0),
+                    new SortedDocValuesField(SEQ_NO_SORTED_NAME, new BytesRef()));
         }
     }
 
     public static final String NAME = "_seq_no";
     public static final String CONTENT_TYPE = "_seq_no";
     public static final String PRIMARY_TERM_NAME = "_primary_term";
+    public static final String SEQ_NO_SORTED_NAME = "_seq_no_sorted";
 
     public static class SeqNoDefaults {
         public static final String NAME = SeqNoFieldMapper.NAME;
@@ -228,6 +234,7 @@ public class SeqNoFieldMapper extends MetadataFieldMapper {
         context.seqID(seqID);
         fields.add(seqID.seqNo);
         fields.add(seqID.seqNoDocValue);
+        fields.add(seqID.seqNoSortedDocValue);
         fields.add(seqID.primaryTerm);
     }
 
@@ -248,6 +255,7 @@ public class SeqNoFieldMapper extends MetadataFieldMapper {
             doc.add(new LongPoint(NAME, 1));
             doc.add(new NumericDocValuesField(NAME, 1L));
             doc.add(new NumericDocValuesField(PRIMARY_TERM_NAME, 0L));
+            doc.add(new SortedDocValuesField(SEQ_NO_SORTED_NAME, new BytesRef()));
         }
     }
 

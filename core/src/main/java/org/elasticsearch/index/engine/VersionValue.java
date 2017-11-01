@@ -37,6 +37,8 @@ class VersionValue implements Accountable {
     /** the the term of the operation that last changed the associated uuid */
     final long term;
 
+    // TODO: Add stable id here
+
     VersionValue(long version, long seqNo, long term) {
         this.version = version;
         this.seqNo = seqNo;

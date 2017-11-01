@@ -20,6 +20,7 @@
 package org.elasticsearch.index.mapper;
 
 import org.apache.lucene.document.Field;
+import org.apache.lucene.document.LongPoint;
 import org.apache.lucene.util.BytesRef;
 import org.elasticsearch.common.bytes.BytesReference;
 import org.elasticsearch.common.xcontent.XContentType;
@@ -85,6 +86,9 @@ public class ParsedDocument {
     public void updateSeqID(long sequenceNumber, long primaryTerm) {
         this.seqID.seqNo.setLongValue(sequenceNumber);
         this.seqID.seqNoDocValue.setLongValue(sequenceNumber);
+        BytesRef seqNoBytes = new BytesRef(new byte[Long.BYTES]);
+        LongPoint.encodeDimension(sequenceNumber, seqNoBytes.bytes, 0);
+        this.seqID.seqNoSortedDocValue.setBytesValue(seqNoBytes);
         this.seqID.primaryTerm.setLongValue(primaryTerm);
     }
 
