@@ -19,172 +19,234 @@
 
 package org.elasticsearch.index.mapper;
 
-import org.apache.lucene.document.Field;
+import org.apache.lucene.document.StoredField;
 import org.apache.lucene.index.IndexOptions;
 import org.apache.lucene.index.IndexableField;
-import org.apache.lucene.search.Query;
-import org.elasticsearch.common.ParsingException;
+import org.apache.lucene.util.BytesRef;
+import org.elasticsearch.ElasticsearchException;
+import org.elasticsearch.Version;
 import org.elasticsearch.common.settings.Settings;
-import org.elasticsearch.common.xcontent.XContentLocation;
+import org.elasticsearch.common.xcontent.XContentBuilder;
 import org.elasticsearch.common.xcontent.XContentParser;
-import org.elasticsearch.index.query.QueryBuilder;
-import org.elasticsearch.index.query.QueryShardContext;
-import org.elasticsearch.index.query.QueryShardException;
+import org.elasticsearch.index.storedfilters.LongIterator;
+import org.elasticsearch.index.storedfilters.LongList;
 import org.elasticsearch.index.storedfilters.StoredFilterUtils;
 
 import java.io.IOException;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 
-import static org.elasticsearch.index.mapper.TypeParsers.parseField;
-import static org.elasticsearch.index.query.AbstractQueryBuilder.parseInnerQueryBuilder;
+public class StoredFilterFieldMapper extends MetadataFieldMapper {
+    public static final String NAME = "_stored_filter";
 
-/**
- *
- */
-public class StoredFilterFieldMapper extends FieldMapper {
+    public static class Defaults  {
+        public static final EnabledAttributeMapper ENABLED_STATE = EnabledAttributeMapper.UNSET_DISABLED;
 
-    public static final String CONTENT_TYPE = "stored_filter";
-
-    private final QueryShardContext queryShardContext;
-
-    public static class Defaults {
-        public static final MappedFieldType FIELD_TYPE = new StoredFilterFieldType();
+        public static final MappedFieldType FIELD_TYPE =
+            new BinaryFieldMapper.BinaryFieldType();
 
         static {
             FIELD_TYPE.setStored(true);
+            FIELD_TYPE.setName(NAME);
             FIELD_TYPE.setIndexOptions(IndexOptions.NONE);
             FIELD_TYPE.setHasDocValues(false);
             FIELD_TYPE.freeze();
         }
     }
 
-    protected StoredFilterFieldMapper(String simpleName, MappedFieldType fieldType, MappedFieldType defaultFieldType,
-                                      Settings indexSettings, MultiFields multiFields, CopyTo copyTo, QueryShardContext queryShardContext) {
-        super(simpleName, fieldType, defaultFieldType, indexSettings, multiFields, copyTo);
-
-        this.queryShardContext = queryShardContext;
+    private static MappedFieldType defaultFieldType(Version indexCreated) {
+        MappedFieldType defaultFieldType = Defaults.FIELD_TYPE.clone();
+        defaultFieldType.setHasDocValues(true);
+        return defaultFieldType;
     }
 
-    public static class Builder extends FieldMapper.Builder<Builder, StoredFilterFieldMapper> {
+    public static class Builder extends MetadataFieldMapper.Builder<Builder, StoredFilterFieldMapper> {
 
-        private final QueryShardContext queryShardContext;
+        protected EnabledAttributeMapper enabledState = EnabledAttributeMapper.UNSET_DISABLED;
 
-        public Builder(String name, QueryShardContext queryShardContext) {
-            super(name, Defaults.FIELD_TYPE, Defaults.FIELD_TYPE);
+        private Builder(MappedFieldType existing, Version indexCreated) {
+            super(NAME, existing == null ? defaultFieldType(indexCreated) : existing.clone(),
+                defaultFieldType(indexCreated));
             builder = this;
-            this.queryShardContext = queryShardContext;
+        }
+
+        public Builder enabled(EnabledAttributeMapper enabled) {
+            this.enabledState = enabled;
+            return builder;
         }
 
         @Override
         public StoredFilterFieldMapper build(BuilderContext context) {
             setupFieldType(context);
-            return new StoredFilterFieldMapper(name, fieldType, defaultFieldType,
-                    context.indexSettings(), multiFieldsBuilder.build(this, context), copyTo, queryShardContext);
+            return new StoredFilterFieldMapper(enabledState, fieldType, context.indexSettings());
         }
     }
 
-    public static class TypeParser implements Mapper.TypeParser {
+    public static class TypeParser implements MetadataFieldMapper.TypeParser {
         @Override
-        public Mapper.Builder parse(String name, Map<String, Object> node, ParserContext parserContext) throws MapperParsingException {
-            StoredFilterFieldMapper.Builder builder = new StoredFilterFieldMapper.Builder(name, parserContext.queryShardContextSupplier().get());
-            parseField(builder, name, node, parserContext);
+        public MetadataFieldMapper.Builder<?, ?> parse(String name, Map<String, Object> node,
+                                                       ParserContext parserContext) throws MapperParsingException {
+            Builder builder = new Builder(parserContext.mapperService().fullName(NAME),
+                parserContext.indexVersionCreated());
+            for (Iterator<Map.Entry<String, Object>> iterator = node.entrySet().iterator(); iterator.hasNext();) {
+                Map.Entry<String, Object> entry = iterator.next();
+                String fieldName = entry.getKey();
+                Object fieldNode = entry.getValue();
+                if (fieldName.equals("enabled")) {
+                    boolean enabled = TypeParsers.nodeBooleanValue(name, "enabled", fieldNode, parserContext);
+                    builder.enabled(enabled ? EnabledAttributeMapper.ENABLED : EnabledAttributeMapper.DISABLED);
+                    iterator.remove();
+                }
+            }
             return builder;
         }
-    }
-
-    static final class StoredFilterFieldType extends MappedFieldType {
-
-        public StoredFilterFieldType() {}
-
-        protected StoredFilterFieldType(StoredFilterFieldType ref) {
-            super(ref);
-        }
 
         @Override
-        public MappedFieldType clone() {
-            return new StoredFilterFieldType(this);
-        }
-
-
-        @Override
-        public String typeName() {
-            return CONTENT_TYPE;
-        }
-
-        @Override
-        public Query termQuery(Object value, QueryShardContext context) {
-            throw new QueryShardException(context, "Binary fields do not support searching");
+        public MetadataFieldMapper getDefault(MappedFieldType fieldType, ParserContext context) {
+            final Settings indexSettings = context.mapperService().getIndexSettings().getSettings();
+            return new StoredFilterFieldMapper(indexSettings, fieldType);
         }
     }
 
-    @Override
-    protected void parseCreateField(ParseContext context, List<IndexableField> fields) throws IOException {
-        QueryShardContext queryShardContext = new QueryShardContext(this.queryShardContext);
-        if (context.doc().getField(fieldType.name()) != null) {
-            // If a percolator query has been defined in an array object then multiple percolator queries
-            // could be provided. In order to prevent this we fail if we try to parse more than one query
-            // for the current document.
-            throw new IllegalArgumentException("a stored filter document can only contain one query");
-        }
+    private EnabledAttributeMapper enabledState;
 
-        XContentParser parser = context.parser();
-        QueryBuilder queryBuilder = parseQueryBuilder(
-            parser, parser.getTokenLocation()
-        );
-
-        //verifyQuery(queryBuilder);
-        // Fetching of terms, shapes and indexed scripts happen during this rewrite:
-        queryBuilder = queryBuilder.rewrite(queryShardContext);
-
-        boolean mapUnmappedFieldAsString = true;
-        Query query = toQuery(queryShardContext, queryBuilder);
-
-        StoredFilterQueryField field = (StoredFilterQueryField) context.doc().getByKey(fieldType().name());
-        if (field == null) {
-            field = new StoredFilterQueryField(query);
-            context.doc().addWithKey(fieldType().name(), field);
-        }
+    private StoredFilterFieldMapper(Settings indexSettings, MappedFieldType existing) {
+        this(Defaults.ENABLED_STATE,
+            existing == null ? defaultFieldType(Version.indexCreated(indexSettings)) : existing.clone(),
+            indexSettings);
     }
 
-    static Query toQuery(QueryShardContext context, QueryBuilder queryBuilder) throws IOException {
-        // This means that fields in the query need to exist in the mapping prior to registering this query
-        // The reason that this is required, is that if a field doesn't exist then the query assumes defaults, which may be undesired.
-        //
-        // Even worse when fields mentioned in percolator queries do go added to map after the queries have been registered
-        // then the percolator queries don't work as expected any more.
-        //
-        // Query parsing can't introduce new fields in mappings (which happens when registering a percolator query),
-        // because field type can't be inferred from queries (like document do) so the best option here is to disallow
-        // the usage of unmapped fields in percolator queries to avoid unexpected behaviour
-        context.setAllowUnmappedFields(false);
-        context.setMapUnmappedFieldAsString(false);
-        return queryBuilder.toQuery(context);
-    }
-
-    private static QueryBuilder parseQueryBuilder(XContentParser parser, XContentLocation location) {
-        try {
-            return parseInnerQueryBuilder(parser);
-        } catch (IOException e) {
-            throw new ParsingException(location, "Failed to parse", e);
-        }
+    private StoredFilterFieldMapper(EnabledAttributeMapper enabled, MappedFieldType fieldType, Settings indexSettings) {
+        super(NAME, fieldType, defaultFieldType(Version.indexCreated(indexSettings)), indexSettings);
+        this.enabledState = enabled;
     }
 
     @Override
     protected String contentType() {
-        return CONTENT_TYPE;
+        return NAME;
     }
 
-    public static class StoredFilterQueryField extends Field {
-        private final Query query;
+    public boolean enabled() {
+        return this.enabledState.enabled;
+    }
 
-        public StoredFilterQueryField(Query query) {
-            super(StoredFilterUtils.STORED_FILTER_QUERY_FIELD_NAME, "queryContent", Defaults.FIELD_TYPE);
-            this.query = query;
+    @Override
+    public void preParse(ParseContext context) throws IOException {
+        context.docMapper().root().mappingUpdate(this);
+    }
+
+    @Override
+    public void postParse(ParseContext context) throws IOException {
+        // we post parse it so we get the size stored, possibly compressed (source will be preParse)
+        //super.parse(context);
+    }
+
+    @Override
+    public Mapper parse(ParseContext context) throws IOException {
+        // nothing to do here, we call the parent in postParse
+        return null;
+    }
+
+    @Override
+    protected void parseCreateField(ParseContext context, List<IndexableField> fields) throws IOException {
+        byte[] value = context.parseExternalValue(byte[].class);
+        if (value == null) {
+            if (context.parser().currentToken() == XContentParser.Token.VALUE_NULL) {
+                return;
+            } else {
+                value = context.parser().binaryValue();
+            }
+        }
+        if (value == null) {
+            return;
         }
 
-        public Query query() {
-            return query;
+        getOrCreateField(context).fieldValue = value;
+    }
+
+    public static void addStoredFilterSequenceNumber(ParseContext context, long value) {
+        getOrCreateField(context).add(value);
+    }
+
+    public static void removeStoredFilterSequenceNumber(ParseContext context, long value) {
+        getOrCreateField(context).remove(value);
+    }
+
+    private static CustomBinaryStoredField getOrCreateField(ParseContext context) {
+        CustomBinaryStoredField field = (CustomBinaryStoredField) context.doc().getByKey(StoredFilterFieldMapper.NAME);
+        if (field == null) {
+            field = new CustomBinaryStoredField(StoredFilterFieldMapper.NAME);
+            context.doc().addWithKey(StoredFilterFieldMapper.NAME, field);
+        }
+
+        return field;
+    }
+
+    @Override
+    public XContentBuilder toXContent(XContentBuilder builder, Params params) throws IOException {
+        boolean includeDefaults = params.paramAsBoolean("include_defaults", false);
+
+        // all are defaults, no need to write it at all
+        if (!includeDefaults && enabledState == Defaults.ENABLED_STATE) {
+            return builder;
+        }
+        builder.startObject(contentType());
+        if (includeDefaults || enabledState != Defaults.ENABLED_STATE) {
+            builder.field("enabled", enabledState.enabled);
+        }
+        builder.endObject();
+        return builder;
+    }
+
+    @Override
+    protected void doMerge(Mapper mergeWith, boolean updateAllTypes) {
+        StoredFilterFieldMapper storedFilterFieldMapperMergeWith = (StoredFilterFieldMapper) mergeWith;
+        if (storedFilterFieldMapperMergeWith.enabledState != enabledState && !storedFilterFieldMapperMergeWith.enabledState.unset()) {
+            this.enabledState = storedFilterFieldMapperMergeWith.enabledState;
+        }
+    }
+
+    private static class CustomBinaryStoredField extends StoredField {
+
+        public byte[] fieldValue;
+        private final LongList addedSequenceNumbers = new LongList();
+        private final LongList removedSequenceNumbers = new LongList();
+
+        public CustomBinaryStoredField(String name) {
+            super(name, TYPE);
+        }
+
+        public void add(long value) {
+            addedSequenceNumbers.add(value);
+        }
+
+        public void remove(long value) {
+            removedSequenceNumbers.add(value);
+        }
+
+        @Override
+        public BytesRef binaryValue() {
+            try {
+                LongIterator baseIterator = LongIterator.empty();
+                if (fieldValue != null) {
+                    baseIterator = StoredFilterUtils.getLongIterator(new BytesRef(fieldValue));
+                }
+
+                addedSequenceNumbers.sortAndDedup();
+                removedSequenceNumbers.sortAndDedup();
+                final BytesRef bytes = StoredFilterUtils.getLongValuesBytes(
+                    LongIterator.sortedUnique(
+                        LongIterator.sortedUnion(
+                            addedSequenceNumbers.iterator(),
+                            LongIterator.sortedExcept(
+                                baseIterator,
+                                removedSequenceNumbers.iterator()))));
+                return bytes;
+            } catch (IOException e) {
+                throw new ElasticsearchException("Failed to get binary value", e);
+            }
+
         }
     }
 }

@@ -21,17 +21,17 @@ public class StoredFilterData
 {
     public final Text filterName;
     public final BytesRef filterNameBytes;
-    public final Query filter;
+    public final LongIterator sequenceNumbers;
 
     public final ParseContext.Document document;
 
     public final Term uid;
 
-    public StoredFilterData(String filterName, Query filter, ParseContext.Document document, Term uid)
+    public StoredFilterData(String filterName, LongIterator sequenceNumbers, ParseContext.Document document, Term uid)
     {
         this.filterName = new Text(filterName);
         this.filterNameBytes = this.filterName.bytes().toBytesRef();
-        this.filter = filter;
+        this.sequenceNumbers = sequenceNumbers;
         this.document = document;
         this.uid = uid;
     }

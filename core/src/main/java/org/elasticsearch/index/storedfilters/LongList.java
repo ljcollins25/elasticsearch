@@ -34,6 +34,25 @@ public class LongList {
         return items[index];
     }
 
+    public void sortAndDedup()
+    {
+        sort();
+
+        long currentValue = Long.MIN_VALUE;
+        int index = 0;
+        for (int i = 0; i < size; i++) {
+            long value = items[i];
+            if (i == 0 || value != currentValue)
+            {
+                items[index] = value;
+                currentValue = value;
+                index++;
+            }
+        }
+
+        size = index;
+    }
+
     public void sort()
     {
         Arrays.sort(items, 0, size);

@@ -11,9 +11,6 @@ import org.apache.lucene.util.packed.MonotonicBlockPackedWriter;
 import org.apache.lucene.util.packed.PackedInts;
 import org.apache.lucene.util.packed.PackedLongValues;
 import org.elasticsearch.common.lucene.store.ByteArrayIndexInput;
-import org.elasticsearch.index.engine.Engine;
-import org.elasticsearch.index.engine.EngineException;
-import org.elasticsearch.index.mapper.ParseContext;
 import org.elasticsearch.index.mapper.SeqNoFieldMapper;
 import org.elasticsearch.index.mapper.StoredFilterFieldMapper;
 
@@ -42,10 +39,9 @@ public class StoredFilterUtils {
     // The field storing sequence numbers of documents matching the stored filter
     public static final String STORED_FILTER_SEQ_NOS_FIELD_NAME = "_stored_filter_seq_nos";
 
-    // The field under which the stored filter query is stored
-    public static final String STORED_FILTER_QUERY_FIELD_NAME = "_stored_filter_query";
+    private static final Set<String> STORED_FILTER_SEQ_NOS_FIELD_NAME_SET = Collections.singleton(StoredFilterFieldMapper.NAME);
 
-    private static final Set<String> STORED_FILTER_SEQ_NOS_FIELD_NAME_SET = Collections.singleton(STORED_FILTER_SEQ_NOS_FIELD_NAME);
+    public static final Object STORED_FILTER_FIELD_KEY = new Object();
 
     // TODO: Add method for taking RoaringDocIdSet (i.e. IEnumerable<long>) for sequence numbers and getting doc ids
     // Set PointsInSetQuery
@@ -54,58 +50,17 @@ public class StoredFilterUtils {
 
     private static final int BlockSize = 1 << 12;
 
-    public static void registerStoredFilter(Engine engine, Engine.Index index, boolean update) {
-        String filterName = index.id();
-        ParseContext.Document doc = index.docs().get(0);
-        StoredFilterFieldMapper.StoredFilterQueryField filterField =
-            (StoredFilterFieldMapper.StoredFilterQueryField)doc.getField(StoredFilterUtils.STORED_FILTER_QUERY_FIELD_NAME);
-
-        registerStoredFilter(engine, filterName, filterField.query(), doc, update ? index.uid() : null);
-    }
-
-    public static void registerStoredFilter(Engine engine, String filterName, Query filter, ParseContext.Document document, Term uid) {
-        // Add filter to map. StoredFilterQuery's after this point will return the
-        // filter query until the filter is removed
-        StoredFilterData filterData = new StoredFilterData(filterName, filter, document, uid);
-        storeFilter(engine, filterData);
-    }
-
-    // New fields:
-    // STORED_FILTER_SEQ_NOS_FIELD_NAME (_stored_filter_seq_nos) - the seq number set for the segments
-
-    public static void storeFilter(Engine engine, StoredFilterData filterData) {
-
-        filterData.document.add(new StringField(StoredFilterUtils.STORED_FILTER_NAME_FIELD_NAME, filterData.filterName.string(), Field.Store.YES));
-
-        Engine.Searcher searcher = null;
-
-        try {
-            searcher = engine.acquireSearcher("storeFilter");
-
-            StoredFilterUtils.addStoredFilterSequenceNumbersField(filterData, searcher.searcher());
-        }
-        catch (IOException ex) { }
-        catch (EngineException ex) { }
-        finally
-        {
-            if (searcher != null)
-            {
-                searcher.close();
-            }
-        }
-    }
-
     public static LongIterator loadSequenceNumbersField(IndexSearcher searcher, int docId) throws IOException {
         Document document = searcher.doc(docId, STORED_FILTER_SEQ_NOS_FIELD_NAME_SET);
-        IndexableField sequenceNoField = document.getField(StoredFilterUtils.STORED_FILTER_SEQ_NOS_FIELD_NAME);
+        IndexableField sequenceNoField = document.getField(StoredFilterFieldMapper.NAME);
         BytesRef bytes = sequenceNoField.binaryValue();
         LongIterator iterator = getLongIterator(bytes);
 
         return iterator;
     }
 
-    private static LongIterator getLongIterator(BytesRef bytes) throws IOException {
-        IndexInput input = new ByteArrayIndexInput(STORED_FILTER_SEQ_NOS_FIELD_NAME, bytes.bytes, bytes.offset, bytes.length);
+    public static LongIterator getLongIterator(BytesRef bytes) throws IOException {
+        IndexInput input = new ByteArrayIndexInput(StoredFilterFieldMapper.NAME, bytes.bytes, bytes.offset, bytes.length);
         long valueCount = input.readVLong();
         MonotonicBlockPackedReader reader = MonotonicBlockPackedReader.of(input, PackedIntsVersion, BlockSize, valueCount, false);
 
@@ -130,12 +85,80 @@ public class StoredFilterUtils {
         };
     }
 
+    public static LongIterator getLongIterator(PackedLongValues packedLongValues) throws IOException {
+        PackedLongValues.Iterator packedLongValuesIterator = packedLongValues.iterator();
+        return new LongIterator() {
+            private long currentValue = 0;
+
+            @Override
+            public boolean moveNext() throws IOException {
+                if (packedLongValuesIterator.hasNext()) {
+                    currentValue = packedLongValuesIterator.next();
+                    return true;
+                }
+                return false;
+            }
+
+            @Override
+            public long longValue() {
+                return currentValue;
+            }
+
+            @Override
+            public LongIterator newIterator() throws IOException {
+                return getLongIterator(packedLongValues);
+            }
+        };
+    }
+
+    public static BytesRef getLongValuesBytes(LongIterator iterator) throws IOException {
+        GrowableByteArrayDataOutput docsOutput = new GrowableByteArrayDataOutput(4096);
+
+        // Write dummy count 0 which is be replaced after writing values is complete
+        docsOutput.writeInt(0);
+
+        MonotonicBlockPackedWriter writer = new MonotonicBlockPackedWriter(docsOutput, BlockSize);
+
+        int count = 0;
+        while (iterator.moveNext()) {
+            count++;
+            writer.add(iterator.longValue());
+        }
+
+        writer.finish();
+
+        // Capture end position in order before reset
+        int end = docsOutput.getPosition();
+
+        // Reset and write actual count
+        docsOutput.reset();
+        docsOutput.writeInt(count);
+
+        return new BytesRef(docsOutput.getBytes(), 0, end);
+    }
+
+    public static BytesRef getLongValuesBytes(long count, LongIterator iterator) throws IOException {
+        GrowableByteArrayDataOutput docsOutput = new GrowableByteArrayDataOutput(4096);
+
+        docsOutput.writeLong(count);
+
+        MonotonicBlockPackedWriter writer = new MonotonicBlockPackedWriter(docsOutput, BlockSize);
+
+        while (iterator.moveNext()) {
+            writer.add(iterator.longValue());
+        }
+
+        writer.finish();
+
+        return new BytesRef(docsOutput.getBytes(), 0, docsOutput.getPosition());
+    }
+
     public static void addStoredFilterSequenceNumbersField(StoredFilterData filterData, IndexSearcher searcher) throws IOException {
 
         //SequenceNoCollector collector = new SequenceNoCollector();
         OrderedSequenceNoCollector collector = new OrderedSequenceNoCollector();
 
-        searcher.search(filterData.filter, collector);
+        //searcher.search(filterData.filter, collector);
 
         PackedLongValues matchingSequenceNumbers = collector.build();
 
@@ -155,7 +178,7 @@ public class StoredFilterUtils {
 
         filterData.document.add(new StoredField(
             STORED_FILTER_SEQ_NOS_FIELD_NAME,
-            new BytesRef(docsOutput.getBytes(), 0, docsOutput.getPosition())));
+            getLongValuesBytes(matchingSequenceNumbers.size(), getLongIterator(matchingSequenceNumbers))));
     }
 
     private static class OrderedSequenceNoCollector implements Collector
@@ -269,7 +292,6 @@ public class StoredFilterUtils {
             public abstract long longValue();
         }
     }
-
 
     private static class SequenceNoCollector implements Collector {
         private long lastSequenceNumber = -1;

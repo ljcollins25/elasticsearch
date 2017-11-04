@@ -774,10 +774,6 @@ public class InternalEngine extends Engine {
         index.parsedDoc().version().setLongValue(plan.versionForIndexing);
         try {
 			ParseContext.Document doc = index.docs().get(0);
-            if (doc.getByKey(StoredFilterUtils.STORED_FILTER_QUERY_FIELD_NAME) != null) {
-                StoredFilterUtils.registerStoredFilter(this, index, plan.useLuceneUpdateDocument);
-            }
-
             if (plan.useLuceneUpdateDocument) {
                 update(index.uid(), index.docs(), indexWriter);
             } else {
