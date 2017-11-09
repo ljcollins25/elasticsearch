@@ -17,33 +17,25 @@
  * under the License.
  */
 
-package org.elasticsearch.index.storedfilters;
+package org.elasticsearch.index.storedfilter;
 
-import org.apache.lucene.search.BooleanClause;
-import org.apache.lucene.search.BooleanQuery;
-import org.apache.lucene.search.ConstantScoreQuery;
 import org.apache.lucene.search.Query;
 import org.elasticsearch.common.ParseField;
 import org.elasticsearch.common.ParsingException;
 import org.elasticsearch.common.Strings;
 import org.elasticsearch.common.io.stream.StreamInput;
 import org.elasticsearch.common.io.stream.StreamOutput;
-import org.elasticsearch.common.lucene.search.Queries;
 import org.elasticsearch.common.xcontent.ObjectParser;
 import org.elasticsearch.common.xcontent.XContentBuilder;
 import org.elasticsearch.common.xcontent.XContentParser;
-import org.elasticsearch.index.mapper.FieldNamesFieldMapper;
 import org.elasticsearch.index.query.AbstractQueryBuilder;
-import org.elasticsearch.index.query.IdsQueryBuilder;
+import org.elasticsearch.index.query.QueryBuilder;
+import org.elasticsearch.index.query.QueryRewriteContext;
 import org.elasticsearch.index.query.QueryShardContext;
 
 import java.io.IOException;
-import java.util.Collection;
-import java.util.Collections;
 import java.util.Objects;
-import java.util.Optional;
-
-import static org.elasticsearch.common.xcontent.ObjectParser.fromList;
+import java.util.function.Supplier;
 
 /**
  * Constructs a query that only match on documents that the field has a value in them.
@@ -54,6 +46,7 @@ public class StoredFilterQueryBuilder extends AbstractQueryBuilder<StoredFilterQ
     public static final ParseField ID_FIELD = new ParseField("id");
 
     private String filterId;
+    private Supplier<LongIterator> iteratorSupplier;
 
     public StoredFilterQueryBuilder(String filterId) {
         if (Strings.isEmpty(filterId)) {
@@ -117,6 +110,18 @@ public class StoredFilterQueryBuilder extends AbstractQueryBuilder<StoredFilterQ
         } catch (IllegalArgumentException e) {
             throw new ParsingException(parser.getTokenLocation(), e.getMessage(), e);
         }
+    }
+
+    @Override
+    protected QueryBuilder doRewrite(QueryRewriteContext queryRewriteContext) throws IOException {
+        QueryShardContext shardContext = queryRewriteContext.convertToShardContext();
+        // If the context is null we are not on the shard and cannot
+        // rewrite so rewrite is noop
+        if (shardContext == null) {
+            return this;
+        }
+
+
     }
 
     @Override
