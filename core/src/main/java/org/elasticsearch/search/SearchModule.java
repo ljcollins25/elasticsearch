@@ -81,7 +81,6 @@ import org.elasticsearch.index.query.functionscore.RandomScoreFunctionBuilder;
 import org.elasticsearch.index.query.functionscore.ScoreFunctionBuilder;
 import org.elasticsearch.index.query.functionscore.ScriptScoreFunctionBuilder;
 import org.elasticsearch.index.query.functionscore.WeightBuilder;
-import org.elasticsearch.index.storedfilters.StoredFilterQueryBuilder;
 import org.elasticsearch.plugins.SearchPlugin;
 import org.elasticsearch.plugins.SearchPlugin.AggregationSpec;
 import org.elasticsearch.plugins.SearchPlugin.FetchPhaseConstructionContext;

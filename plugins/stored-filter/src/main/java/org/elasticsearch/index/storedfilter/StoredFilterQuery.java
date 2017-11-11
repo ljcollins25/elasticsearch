@@ -17,22 +17,14 @@
  * under the License.
  */
 
-package org.elasticsearch.index.storedfilters;
+package org.elasticsearch.index.storedfilter;
 
-import org.apache.lucene.document.Document;
 import org.apache.lucene.index.*;
 import org.apache.lucene.search.*;
-import org.apache.lucene.store.ByteArrayDataInput;
-import org.apache.lucene.util.BytesRef;
 import org.elasticsearch.common.text.Text;
-import org.elasticsearch.index.shard.ShardId;
 
 import java.io.IOException;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Map;
 import java.util.Objects;
-import java.util.Set;
 
 /** A {@link Query} that matches documents in a stored filter. */
 public final class StoredFilterQuery extends Query {
@@ -40,7 +32,7 @@ public final class StoredFilterQuery extends Query {
     private final Text filterName;
 
     /** Sole constructor. */
-    public StoredFilterQuery(String filterName) {
+    public StoredFilterQuery(String filterName, String fieldName, LongIterator valuesIterator) {
         this.filterName = new Text(filterName);
     }
 

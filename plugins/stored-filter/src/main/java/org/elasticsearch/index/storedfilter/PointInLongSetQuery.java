@@ -14,14 +14,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.elasticsearch.index.storedfilters;
+package org.elasticsearch.index.storedfilter;
 
 import java.io.IOException;
-import java.util.AbstractCollection;
-import java.util.Arrays;
-import java.util.Collection;
-import java.util.Iterator;
-import java.util.NoSuchElementException;
+import java.util.Objects;
+
 import org.apache.lucene.document.IntPoint;
 import org.apache.lucene.document.LongPoint;
 import org.apache.lucene.index.LeafReader;
@@ -29,8 +26,6 @@ import org.apache.lucene.index.LeafReaderContext;
 import org.apache.lucene.index.PointValues.IntersectVisitor;
 import org.apache.lucene.index.PointValues.Relation;
 import org.apache.lucene.index.PointValues;
-import org.apache.lucene.index.PrefixCodedTerms.TermIterator;
-import org.apache.lucene.index.PrefixCodedTerms;
 import org.apache.lucene.search.ConstantScoreScorer;
 import org.apache.lucene.search.ConstantScoreWeight;
 import org.apache.lucene.search.IndexSearcher;
@@ -38,12 +33,8 @@ import org.apache.lucene.search.Query;
 import org.apache.lucene.search.Scorer;
 import org.apache.lucene.search.Weight;
 import org.apache.lucene.util.BytesRef;
-import org.apache.lucene.util.BytesRefBuilder;
 import org.apache.lucene.util.BytesRefIterator;
 import org.apache.lucene.util.DocIdSetBuilder;
-import org.apache.lucene.util.StringHelper;
-import org.elasticsearch.index.mapper.SeqNoFieldMapper;
-import org.elasticsearch.index.storedfilters.LongIterator;
 
 /**
  * Abstract query class to find all documents whose single or multi-dimensional point values, previously indexed with e.g. {@link IntPoint},
@@ -57,42 +48,66 @@ import org.elasticsearch.index.storedfilters.LongIterator;
  * @see PointValues
  * @lucene.experimental */
 
-public class PointInLongSetQuery {
+public class PointInLongSetQuery extends Query {
     // A little bit overkill for us, since all of our "terms" are always in the same field:
-    private final LongIterator sortedPackedPoints;
+    private final LongIterator values;
+
+    private final String fieldName;
+    private final String valuesHash;
+
+    @Override
+    public String toString(String field) {
+        return "PointInLongSetQuery(fieldName=" + fieldName  + ", valuesHash=" + valuesHash + ")";
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+        if (sameClassAs(obj) == false) {
+            return false;
+        }
+        PointInLongSetQuery that = (PointInLongSetQuery) obj;
+        return fieldName.equals(that.fieldName) && valuesHash.equals(that.valuesHash);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(classHash(), fieldName, valuesHash);
+    }
 
     /**
      * Iterator of encoded point values.
      */
-    // TODO: if we want to stream, maybe we should use jdk stream class?
     public static abstract class Stream implements BytesRefIterator {
         @Override
         public abstract BytesRef next();
     };
 
     /** The {@code packedPoints} iterator must be in sorted order. */
-    public PointInLongSetQuery(LongIterator sortedPackedPoints) {
-        this.sortedPackedPoints = sortedPackedPoints;
+    public PointInLongSetQuery(String fieldName, String valuesHash, LongIterator values) {
+        this.fieldName = fieldName;
+        this.valuesHash = valuesHash;
+        this.values = values;
     }
 
-    public final Weight createWeight(Query query, IndexSearcher searcher, boolean needsScores, float boost) throws IOException {
+    @Override
+    public final Weight createWeight(IndexSearcher searcher, boolean needsScores, float boost) throws IOException {
 
         // We don't use RandomAccessWeight here: it's no good to approximate with "match all docs".
         // This is an inverted structure and should be used in the first pass:
 
-        return new ConstantScoreWeight(query, boost) {
+        return new ConstantScoreWeight(this, boost) {
 
             @Override
             public Scorer scorer(LeafReaderContext context) throws IOException {
                 LeafReader reader = context.reader();
 
-                PointValues values = reader.getPointValues(SeqNoFieldMapper.NAME);
+                PointValues values = reader.getPointValues(fieldName);
                 if (values == null) {
                     // No docs in this segment/field indexed any points
                     return null;
                 }
 
-                DocIdSetBuilder result = new DocIdSetBuilder(reader.maxDoc(), values, SeqNoFieldMapper.NAME);
+                DocIdSetBuilder result = new DocIdSetBuilder(reader.maxDoc(), values, fieldName);
 
                 // We optimize this common case, effectively doing a merge sort of the indexed values vs the queried set:
                 values.intersect(new MergePointVisitor(result));
@@ -119,7 +134,7 @@ public class PointInLongSetQuery {
             iterator = new Stream()
             {
                 private BytesRef iteratorScratch = new BytesRef(new byte[Long.BYTES]);
-                private LongIterator sortedIterator = sortedPackedPoints.newIterator();
+                private LongIterator sortedIterator = values.newIterator();
 
                 @Override
                 public BytesRef next() {

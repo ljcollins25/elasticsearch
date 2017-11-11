@@ -1,4 +1,4 @@
-package org.elasticsearch.index.storedfilters;
+package org.elasticsearch.index.storedfilter;
 
 import java.io.IOException;
 
