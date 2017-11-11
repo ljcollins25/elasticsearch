@@ -17,33 +17,31 @@
  * under the License.
  */
 
-package org.elasticsearch.index.storedfilters;
+package org.elasticsearch.index.storedfilter;
 
-import org.apache.lucene.search.BooleanClause;
-import org.apache.lucene.search.BooleanQuery;
-import org.apache.lucene.search.ConstantScoreQuery;
 import org.apache.lucene.search.Query;
+import org.apache.lucene.util.SetOnce;
+import org.elasticsearch.action.ActionListener;
+import org.elasticsearch.action.get.GetRequest;
+import org.elasticsearch.action.get.GetResponse;
+import org.elasticsearch.client.Client;
 import org.elasticsearch.common.ParseField;
 import org.elasticsearch.common.ParsingException;
 import org.elasticsearch.common.Strings;
 import org.elasticsearch.common.io.stream.StreamInput;
 import org.elasticsearch.common.io.stream.StreamOutput;
-import org.elasticsearch.common.lucene.search.Queries;
 import org.elasticsearch.common.xcontent.ObjectParser;
 import org.elasticsearch.common.xcontent.XContentBuilder;
 import org.elasticsearch.common.xcontent.XContentParser;
-import org.elasticsearch.index.mapper.FieldNamesFieldMapper;
-import org.elasticsearch.index.query.AbstractQueryBuilder;
-import org.elasticsearch.index.query.IdsQueryBuilder;
-import org.elasticsearch.index.query.QueryShardContext;
+import org.elasticsearch.common.xcontent.support.XContentMapValues;
+import org.elasticsearch.index.query.*;
+import org.elasticsearch.indices.TermsLookup;
 
 import java.io.IOException;
-import java.util.Collection;
-import java.util.Collections;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Objects;
-import java.util.Optional;
-
-import static org.elasticsearch.common.xcontent.ObjectParser.fromList;
+import java.util.function.Supplier;
 
 /**
  * Constructs a query that only match on documents that the field has a value in them.
@@ -54,12 +52,21 @@ public class StoredFilterQueryBuilder extends AbstractQueryBuilder<StoredFilterQ
     public static final ParseField ID_FIELD = new ParseField("id");
 
     private String filterId;
+    private Supplier<LongIterator> iteratorSupplier;
 
     public StoredFilterQueryBuilder(String filterId) {
         if (Strings.isEmpty(filterId)) {
             throw new IllegalArgumentException("filter id is null or empty");
         }
         this.filterId = filterId;
+    }
+
+    public StoredFilterQueryBuilder(String filterId, Supplier<LongIterator> iteratorSupplier) {
+        if (Strings.isEmpty(filterId)) {
+            throw new IllegalArgumentException("filter id is null or empty");
+        }
+        this.filterId = filterId;
+        this.iteratorSupplier = iteratorSupplier;
     }
 
     /**
@@ -117,6 +124,47 @@ public class StoredFilterQueryBuilder extends AbstractQueryBuilder<StoredFilterQ
         } catch (IllegalArgumentException e) {
             throw new ParsingException(parser.getTokenLocation(), e.getMessage(), e);
         }
+    }
+
+    private void fetch(TermsLookup termsLookup, Client client, ActionListener<List<Object>> actionListener) {
+        GetRequest getRequest = new GetRequest(termsLookup.index(), termsLookup.type(), termsLookup.id())
+            .preference("_local").routing(termsLookup.routing());
+        client.get(getRequest, new ActionListener<GetResponse>() {
+            @Override
+            public void onResponse(GetResponse getResponse) {
+                List<Object> terms = new ArrayList<>();
+                if (getResponse.isSourceEmpty() == false) { // extract terms only if the doc source exists
+                    List<Object> extractedValues = XContentMapValues.extractRawValues(termsLookup.path(), getResponse.getSourceAsMap());
+                    terms.addAll(extractedValues);
+                }
+                actionListener.onResponse(terms);
+            }
+
+            @Override
+            public void onFailure(Exception e) {
+                actionListener.onFailure(e);
+            }
+        });
+    }
+
+    @Override
+    protected QueryBuilder doRewrite(QueryRewriteContext queryRewriteContext) throws IOException {
+        QueryShardContext shardContext = queryRewriteContext.convertToShardContext();
+        // If the context is null we are not on the shard and cannot
+        // rewrite so rewrite is noop
+        if (shardContext == null) {
+            return this;
+        }
+
+        SetOnce<LongIterator> supplier = new SetOnce<>();
+        queryRewriteContext.registerAsyncAction((client, listener) -> {
+            fetch(termsLookup, client, ActionListener.wrap(list -> {
+                supplier.set(list);
+                listener.onResponse(null);
+            }, listener::onFailure));
+
+        });
+        return new StoredFilterQueryBuilder(this.filterId, supplier::get);
     }
 
     @Override

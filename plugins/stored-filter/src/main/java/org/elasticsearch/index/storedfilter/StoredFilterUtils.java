@@ -1,4 +1,4 @@
-package org.elasticsearch.index.storedfilters;
+package org.elasticsearch.index.storedfilter;
 
 import org.apache.lucene.document.*;
 import org.apache.lucene.index.*;
@@ -12,7 +12,6 @@ import org.apache.lucene.util.packed.PackedInts;
 import org.apache.lucene.util.packed.PackedLongValues;
 import org.elasticsearch.common.lucene.store.ByteArrayIndexInput;
 import org.elasticsearch.index.mapper.SeqNoFieldMapper;
-import org.elasticsearch.index.mapper.StoredFilterFieldMapper;
 
 import java.io.IOException;
 import java.util.ArrayList;
