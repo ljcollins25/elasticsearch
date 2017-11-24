@@ -1,6 +1,5 @@
-package org.elasticsearch.index.storedfilters;
+package org.elasticsearch.index.storedfilter;
 
-import org.apache.lucene.search.DocIdSet;
 import org.apache.lucene.util.packed.PackedLongValues;
 
 import java.io.IOException;

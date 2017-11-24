@@ -411,6 +411,7 @@ public class BulkRequest extends ActionRequest implements CompositeIndicesReques
                     } else if ("update".equals(action)) {
                         UpdateRequest updateRequest = new UpdateRequest(index, type, id).routing(routing).parent(parent).retryOnConflict(retryOnConflict)
                                 .version(version).versionType(versionType)
+                                .setPipeline((pipeline))
                                 .routing(routing)
                                 .parent(parent);
                         // EMPTY is safe here because we never call namedObject

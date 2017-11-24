@@ -116,9 +116,6 @@ public class IndicesModule extends AbstractModule {
         metadataMappers.put(VersionFieldMapper.NAME, new VersionFieldMapper.TypeParser());
         metadataMappers.put(ParentFieldMapper.NAME, new ParentFieldMapper.TypeParser());
         metadataMappers.put(SeqNoFieldMapper.NAME, new SeqNoFieldMapper.TypeParser());
-        metadataMappers.put(StoredFilterFieldMapper.NAME, new StoredFilterFieldMapper.TypeParser());
-        metadataMappers.put(StoredFilterUpdateFieldMapper.ADD_NAME, new StoredFilterUpdateFieldMapper.TypeParser(StoredFilterUpdateFieldMapper.UpdateKind.Add));
-        metadataMappers.put(StoredFilterUpdateFieldMapper.REMOVE_NAME, new StoredFilterUpdateFieldMapper.TypeParser(StoredFilterUpdateFieldMapper.UpdateKind.Remove));
         // _field_names is not registered here, see below
 
         for (MapperPlugin mapperPlugin : mapperPlugins) {

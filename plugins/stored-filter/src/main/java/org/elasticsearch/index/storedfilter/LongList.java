@@ -1,8 +1,7 @@
-package org.elasticsearch.index.storedfilters;
+package org.elasticsearch.index.storedfilter;
 
 import java.io.IOException;
 import java.util.Arrays;
-import java.util.List;
 
 /**
  * Growable array of longs without boxing

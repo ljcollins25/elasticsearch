@@ -62,6 +62,8 @@ public class UpdateRequest extends InstanceShardOperationRequest<UpdateRequest>
     @Nullable
     private String parent;
 
+    private String pipeline;
+
     @Nullable
     Script script;
 
@@ -219,6 +221,21 @@ public class UpdateRequest extends InstanceShardOperationRequest<UpdateRequest>
     public UpdateRequest script(Script script) {
         this.script = script;
         return this;
+    }
+
+    /**
+     * Sets the ingest pipeline to be executed before indexing the document
+     */
+    public UpdateRequest setPipeline(String pipeline) {
+        this.pipeline = pipeline;
+        return this;
+    }
+
+    /**
+     * Returns the ingest pipeline to be executed before indexing the document
+     */
+    public String getPipeline() {
+        return this.pipeline;
     }
 
     /**

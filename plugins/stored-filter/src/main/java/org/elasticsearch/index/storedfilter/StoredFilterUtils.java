@@ -1,4 +1,4 @@
-package org.elasticsearch.index.storedfilters;
+package org.elasticsearch.index.storedfilter;
 
 import org.apache.lucene.document.*;
 import org.apache.lucene.index.*;
@@ -12,7 +12,6 @@ import org.apache.lucene.util.packed.PackedInts;
 import org.apache.lucene.util.packed.PackedLongValues;
 import org.elasticsearch.common.lucene.store.ByteArrayIndexInput;
 import org.elasticsearch.index.mapper.SeqNoFieldMapper;
-import org.elasticsearch.index.mapper.StoredFilterFieldMapper;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -27,22 +26,6 @@ import static org.apache.lucene.search.DocIdSetIterator.NO_MORE_DOCS;
  */
 public class StoredFilterUtils {
 
-    // These are fields for the filter document
-
-    // The field in the stored filter document specifying the filter name
-    // This is assumed to be added to filter document before entering the
-    // stored filter manager.
-    // TODO: Maybe this should be added by the stored filter manager? Depends on
-    // TODO: stored filters are added
-    public static final String STORED_FILTER_NAME_FIELD_NAME = "_stored_filter_name";
-
-    // The field storing sequence numbers of documents matching the stored filter
-    public static final String STORED_FILTER_SEQ_NOS_FIELD_NAME = "_stored_filter_seq_nos";
-
-    private static final Set<String> STORED_FILTER_SEQ_NOS_FIELD_NAME_SET = Collections.singleton(StoredFilterFieldMapper.NAME);
-
-    public static final Object STORED_FILTER_FIELD_KEY = new Object();
-
     // TODO: Add method for taking RoaringDocIdSet (i.e. IEnumerable<long>) for sequence numbers and getting doc ids
     // Set PointsInSetQuery
 
@@ -50,17 +33,8 @@ public class StoredFilterUtils {
 
     private static final int BlockSize = 1 << 12;
 
-    public static LongIterator loadSequenceNumbersField(IndexSearcher searcher, int docId) throws IOException {
-        Document document = searcher.doc(docId, STORED_FILTER_SEQ_NOS_FIELD_NAME_SET);
-        IndexableField sequenceNoField = document.getField(StoredFilterFieldMapper.NAME);
-        BytesRef bytes = sequenceNoField.binaryValue();
-        LongIterator iterator = getLongIterator(bytes);
-
-        return iterator;
-    }
-
     public static LongIterator getLongIterator(BytesRef bytes) throws IOException {
-        IndexInput input = new ByteArrayIndexInput(StoredFilterFieldMapper.NAME, bytes.bytes, bytes.offset, bytes.length);
+        IndexInput input = new ByteArrayIndexInput("StoredFilterBytes", bytes.bytes, bytes.offset, bytes.length);
         long valueCount = input.readVLong();
         MonotonicBlockPackedReader reader = MonotonicBlockPackedReader.of(input, PackedIntsVersion, BlockSize, valueCount, false);
 
@@ -135,50 +109,6 @@ public class StoredFilterUtils {
         docsOutput.writeInt(count);
 
         return new BytesRef(docsOutput.getBytes(), 0, end);
-    }
-
-    public static BytesRef getLongValuesBytes(long count, LongIterator iterator) throws IOException {
-        GrowableByteArrayDataOutput docsOutput = new GrowableByteArrayDataOutput(4096);
-
-        docsOutput.writeLong(count);
-
-        MonotonicBlockPackedWriter writer = new MonotonicBlockPackedWriter(docsOutput, BlockSize);
-
-        while (iterator.moveNext()) {
-            writer.add(iterator.longValue());
-        }
-
-        writer.finish();
-
-        return new BytesRef(docsOutput.getBytes(), 0, docsOutput.getPosition());
-    }
-
-    public static void addStoredFilterSequenceNumbersField(StoredFilterData filterData, IndexSearcher searcher) throws IOException {
-
-        //SequenceNoCollector collector = new SequenceNoCollector();
-        OrderedSequenceNoCollector collector = new OrderedSequenceNoCollector();
-
-        //searcher.search(filterData.filter, collector);
-
-        PackedLongValues matchingSequenceNumbers = collector.build();
-
-        GrowableByteArrayDataOutput docsOutput = new GrowableByteArrayDataOutput(4096);
-
-        PackedLongValues.Iterator iterator = matchingSequenceNumbers.iterator();
-
-        docsOutput.writeVLong(matchingSequenceNumbers.size());
-
-        MonotonicBlockPackedWriter writer = new MonotonicBlockPackedWriter(docsOutput, BlockSize);
-
-        while (iterator.hasNext()) {
-            writer.add(iterator.next());
-        }
-
-        writer.finish();
-
-        filterData.document.add(new StoredField(
-            STORED_FILTER_SEQ_NOS_FIELD_NAME,
-            getLongValuesBytes(matchingSequenceNumbers.size(), getLongIterator(matchingSequenceNumbers))));
     }
 
     private static class OrderedSequenceNoCollector implements Collector

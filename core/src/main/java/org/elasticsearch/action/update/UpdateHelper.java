@@ -155,6 +155,7 @@ public class UpdateHelper extends AbstractComponent {
             indexRequest.index(request.index())
                     .type(request.type()).id(request.id()).setRefreshPolicy(request.getRefreshPolicy()).routing(request.routing())
                     .parent(request.parent()).timeout(request.timeout()).waitForActiveShards(request.waitForActiveShards())
+                    .setPipeline(request.getPipeline())
                     // it has to be a "create!"
                     .create(true);
 
@@ -235,7 +236,8 @@ public class UpdateHelper extends AbstractComponent {
                     .type(request.type()).id(request.id()).routing(routing).parent(parent)
                     .source(updatedSourceAsMap, updateSourceContentType).version(updateVersion).versionType(request.versionType())
                     .waitForActiveShards(request.waitForActiveShards()).timeout(request.timeout())
-                    .setRefreshPolicy(request.getRefreshPolicy());
+                    .setRefreshPolicy(request.getRefreshPolicy())
+                    .setPipeline(request.getPipeline());
             return new Result(finalIndexRequest, DocWriteResponse.Result.UPDATED, updatedSourceAsMap, updateSourceContentType);
         }
     }
@@ -277,7 +279,8 @@ public class UpdateHelper extends AbstractComponent {
                         .type(request.type()).id(request.id()).routing(routing).parent(parent)
                         .source(updatedSourceAsMap, updateSourceContentType).version(updateVersion).versionType(request.versionType())
                         .waitForActiveShards(request.waitForActiveShards()).timeout(request.timeout())
-                        .setRefreshPolicy(request.getRefreshPolicy());
+                        .setRefreshPolicy(request.getRefreshPolicy())
+                        .setPipeline(request.getPipeline());
                 return new Result(indexRequest, DocWriteResponse.Result.UPDATED, updatedSourceAsMap, updateSourceContentType);
             case DELETE:
                 DeleteRequest deleteRequest = Requests.deleteRequest(request.index())
