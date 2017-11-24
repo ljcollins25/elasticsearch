@@ -6,18 +6,18 @@ import org.apache.lucene.search.*;
 import org.apache.lucene.store.GrowableByteArrayDataOutput;
 import org.apache.lucene.store.IndexInput;
 import org.apache.lucene.util.*;
+import org.apache.lucene.util.PriorityQueue;
 import org.apache.lucene.util.packed.MonotonicBlockPackedReader;
 import org.apache.lucene.util.packed.MonotonicBlockPackedWriter;
 import org.apache.lucene.util.packed.PackedInts;
 import org.apache.lucene.util.packed.PackedLongValues;
+import org.elasticsearch.common.hash.MurmurHash3;
 import org.elasticsearch.common.lucene.store.ByteArrayIndexInput;
 import org.elasticsearch.index.mapper.SeqNoFieldMapper;
 
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
-import java.util.Set;
+import java.util.*;
+import java.util.function.Supplier;
 
 import static org.apache.lucene.search.DocIdSetIterator.NO_MORE_DOCS;
 
@@ -32,6 +32,27 @@ public class StoredFilterUtils {
     private static final int PackedIntsVersion = PackedInts.VERSION_MONOTONIC_WITHOUT_ZIGZAG;
 
     private static final int BlockSize = 1 << 12;
+
+    static final MurmurHash3.Hash128 seed = new MurmurHash3.Hash128();
+
+    public static String hashBytes(byte[] bytes, int offset, int length) {
+        MurmurHash3.Hash128 hash = MurmurHash3.hash128(bytes, offset, length, 0, seed);
+
+        return Long.toHexString(hash.h1) + Long.toHexString(hash.h2);
+    }
+
+    public static byte[] convertFieldValueToBytes(Object object, String fieldPath) {
+        if (object == null) {
+            return null;
+        } else if (object instanceof byte[]) {
+            return (byte[]) object;
+        } else if (object instanceof String) {
+            return Base64.getDecoder().decode(object.toString());
+        } else {
+            throw new IllegalArgumentException("Content field [" + fieldPath + "] of unknown type [" + object.getClass().getName() +
+                "], must be string or byte array");
+        }
+    }
 
     public static LongIterator getLongIterator(BytesRef bytes) throws IOException {
         IndexInput input = new ByteArrayIndexInput("StoredFilterBytes", bytes.bytes, bytes.offset, bytes.length);
@@ -85,7 +106,7 @@ public class StoredFilterUtils {
         };
     }
 
-    public static BytesRef getLongValuesBytes(LongIterator iterator) throws IOException {
+    public static BytesRef getLongValuesBytes(LongIterator iterator, SetOnce<Integer> countSupplier) throws IOException {
         GrowableByteArrayDataOutput docsOutput = new GrowableByteArrayDataOutput(4096);
 
         // Write dummy count 0 which is be replaced after writing values is complete
@@ -100,6 +121,7 @@ public class StoredFilterUtils {
         }
 
         writer.finish();
+        countSupplier.set(count);
 
         // Capture end position in order before reset
         int end = docsOutput.getPosition();

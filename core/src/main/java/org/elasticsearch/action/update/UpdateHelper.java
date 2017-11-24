@@ -132,6 +132,7 @@ public class UpdateHelper extends AbstractComponent {
                 throw new DocumentMissingException(shardId, request.type(), request.id());
             }
             IndexRequest indexRequest = request.docAsUpsert() ? request.doc() : request.upsertRequest();
+            indexRequest.setPipeline(request.getPipeline());
             if (request.scriptedUpsert() && request.script() != null) {
                 // Run the script to perform the create logic
                 IndexRequest upsert = request.upsertRequest();

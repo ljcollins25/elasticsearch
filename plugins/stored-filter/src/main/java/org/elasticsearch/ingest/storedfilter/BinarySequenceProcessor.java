@@ -20,7 +20,9 @@
 package org.elasticsearch.ingest.storedfilter;
 
 import org.apache.lucene.util.BytesRef;
+import org.apache.lucene.util.SetOnce;
 import org.elasticsearch.ElasticsearchException;
+import org.elasticsearch.common.hash.MurmurHash3;
 import org.elasticsearch.index.storedfilter.LongIterator;
 import org.elasticsearch.index.storedfilter.LongList;
 import org.elasticsearch.index.storedfilter.StoredFilterUtils;
@@ -44,13 +46,19 @@ public final class BinarySequenceProcessor extends AbstractProcessor {
 
     private final String includeField;
     private final String excludeField;
+    private final String unionField;
     private final String targetField;
+    private final String targetCountField;
+    private final String targetHashField;
 
-    BinarySequenceProcessor(String tag, String includeField, String excludeField, String targetField) {
+    BinarySequenceProcessor(String tag, String includeField, String excludeField, String unionField, String targetField, String targetCountField, String targetHashField) {
         super(tag);
         this.includeField = includeField;
         this.excludeField = excludeField;
         this.targetField = targetField;
+        this.unionField = unionField;
+        this.targetHashField = targetHashField;
+        this.targetCountField = targetCountField;
     }
 
     String getIncludeField() {
@@ -76,34 +84,56 @@ public final class BinarySequenceProcessor extends AbstractProcessor {
             fieldBuilder.add(fieldBytes);
         }
 
+        if (unionField != null) {
+            List<Object> list = document.getFieldValue(unionField, List.class, true);
+            if (list != null) {
+                for (Object value : list) {
+                    fieldBuilder.add(StoredFilterUtils.convertFieldValueToBytes(value, unionField));
+                }
+
+                document.removeField(unionField);
+            }
+        }
+
         if (includeField != null) {
             List<Number> list = document.getFieldValue(includeField, List.class, true);
-            if (list == null) {
-                throw new IllegalArgumentException("includeField [" + includeField + "] is null, cannot join.");
-            }
+            if (list != null) {
+                for (Number value : list) {
+                    fieldBuilder.add(value.longValue());
+                }
 
-            for (Number value : list) {
-                fieldBuilder.add(value.longValue());
+                document.removeField(includeField);
             }
-
-            document.removeField(includeField);
         }
 
         if (excludeField != null) {
             List<Number> list = document.getFieldValue(excludeField, List.class, true);
-            if (list == null) {
-                throw new IllegalArgumentException("excludeField [" + excludeField + "] is null, cannot join.");
-            }
+            if (list != null) {
+                for (Number value : list) {
+                    fieldBuilder.remove(value.longValue());
+                }
 
-            for (Number value : list) {
-                fieldBuilder.remove(value.longValue());
+                document.removeField(excludeField);
             }
-
-            document.removeField(excludeField);
         }
 
-        // TODO: Maybe add hash of binary value
-        document.setFieldValue(targetField, BytesRef.deepCopyOf(fieldBuilder.binaryValue()).bytes);
+        SetOnce<Integer> countSupplier = new SetOnce<>();
+        byte[] updatedFieldBytes = BytesRef.deepCopyOf(fieldBuilder.binaryValue(countSupplier)).bytes;
+        document.setFieldValue(targetField, updatedFieldBytes);
+        if (targetCountField != null) {
+            document.setFieldValue(targetCountField, countSupplier.get());
+        }
+
+        if (targetHashField != null) {
+            String targetHash = document.getFieldValue(targetHashField, String.class, true);
+
+            // Use targetHash == string.Empty as an indicator to hash the field
+            // This is a rather odd approach but it allows using the same processor for building up the binary sequence filter
+            // and for the creating the final binary sequence filter which includes the hash
+            if (targetHash != null && targetHash.isEmpty()) {
+                document.setFieldValue(targetHashField, StoredFilterUtils.hashBytes(updatedFieldBytes, 0, updatedFieldBytes.length));
+            }
+        }
     }
 
     @Override
@@ -118,8 +148,11 @@ public final class BinarySequenceProcessor extends AbstractProcessor {
             String includeField = ConfigurationUtils.readOptionalStringProperty(TYPE, processorTag, config, "include_field");
             String excludeField = ConfigurationUtils.readOptionalStringProperty(TYPE, processorTag, config, "exclude_field");
             String targetField = ConfigurationUtils.readStringProperty(TYPE, processorTag, config, "target_field");
+            String targetCountField = ConfigurationUtils.readOptionalStringProperty(TYPE, processorTag, config, "target_count_field");
+            String targetHashField = ConfigurationUtils.readOptionalStringProperty(TYPE, processorTag, config, "target_hash_field");
+            String unionField = ConfigurationUtils.readOptionalStringProperty(TYPE, processorTag, config, "union_field");
 
-            return new BinarySequenceProcessor(processorTag, includeField, excludeField, targetField);
+            return new BinarySequenceProcessor(processorTag, includeField, excludeField, unionField, targetField, targetCountField, targetHashField);
         }
     }
 
@@ -141,7 +174,7 @@ public final class BinarySequenceProcessor extends AbstractProcessor {
             removedValues.add(value);
         }
 
-        public BytesRef binaryValue() {
+        public BytesRef binaryValue(SetOnce<Integer> countSupplier) {
             try {
                 // The just return the field value if there is only one and it does not need to be joined with another other sequence numbers
                 if (fieldValues.size() == 1 && addedValues.size() == 0 && removedValues.size() == 0) {
@@ -162,7 +195,8 @@ public final class BinarySequenceProcessor extends AbstractProcessor {
                             addedValues.iterator(),
                             LongIterator.sortedExcept(
                                 baseIterator,
-                                removedValues.iterator()))));
+                                removedValues.iterator()))),
+                    countSupplier);
                 return bytes;
             } catch (IOException e) {
                 throw new ElasticsearchException("Failed to get binary value", e);
