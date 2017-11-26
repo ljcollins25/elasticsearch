@@ -210,7 +210,7 @@ public class TransportSearchAction extends HandledTransportAction<SearchRequest,
         if (searchRequest.source() == null) {
             rewriteListener.onResponse(searchRequest.source());
         } else {
-            Rewriteable.rewriteAndFetch(searchRequest.source(), searchService.getRewriteContext(timeProvider::getAbsoluteStartMillis),
+            Rewriteable.rewriteAndFetch(searchRequest.source(), searchService.getRewriteContext(timeProvider::getAbsoluteStartMillis, null),
                 rewriteListener);
         }
     }

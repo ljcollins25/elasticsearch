@@ -36,13 +36,15 @@ public class QueryRewriteContext {
     private final NamedXContentRegistry xContentRegistry;
     protected final Client client;
     protected final LongSupplier nowInMillis;
+    protected final Integer shardId;
     private final List<BiConsumer<Client, ActionListener<?>>> asyncActions = new ArrayList<>();
 
 
-    public QueryRewriteContext(NamedXContentRegistry xContentRegistry, Client client, LongSupplier nowInMillis) {
+    public QueryRewriteContext(NamedXContentRegistry xContentRegistry, Client client, LongSupplier nowInMillis, Integer shardId) {
         this.xContentRegistry = xContentRegistry;
         this.client = client;
         this.nowInMillis = nowInMillis;
+        this.shardId = shardId;
     }
 
     /**
@@ -57,6 +59,13 @@ public class QueryRewriteContext {
      */
     public long nowInMillis() {
         return nowInMillis.getAsLong();
+    }
+
+    /**
+     * Returns the shard id on which the query is executed.
+     */
+    public Integer shardId() {
+        return shardId;
     }
 
     /**

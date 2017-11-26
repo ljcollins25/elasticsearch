@@ -92,7 +92,7 @@ public interface LongIterator {
                 }
 
                 remainingIterator = greaterIterator;
-                return remainingIterator.moveNext();
+                return true;
             }
 
             @Override
@@ -125,6 +125,7 @@ public interface LongIterator {
                     }
                 }
 
+                initialized = true;
                 lastValue = iterator.longValue();
                 return true;
             }

@@ -1242,8 +1242,8 @@ public class IndicesService extends AbstractLifecycleComponent
     /**
      * Returns a new {@link QueryRewriteContext} with the given <tt>now</tt> provider
      */
-    public QueryRewriteContext getRewriteContext(LongSupplier nowInMillis) {
-        return new QueryRewriteContext(xContentRegistry, client, nowInMillis);
+    public QueryRewriteContext getRewriteContext(LongSupplier nowInMillis, Integer shardId) {
+        return new QueryRewriteContext(xContentRegistry, client, nowInMillis, shardId);
     }
 
 }

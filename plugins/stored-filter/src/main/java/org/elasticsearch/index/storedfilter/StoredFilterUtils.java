@@ -56,7 +56,7 @@ public class StoredFilterUtils {
 
     public static LongIterator getLongIterator(BytesRef bytes) throws IOException {
         IndexInput input = new ByteArrayIndexInput("StoredFilterBytes", bytes.bytes, bytes.offset, bytes.length);
-        long valueCount = input.readVLong();
+        long valueCount = input.readInt();
         MonotonicBlockPackedReader reader = MonotonicBlockPackedReader.of(input, PackedIntsVersion, BlockSize, valueCount, false);
 
         return new LongIterator() {

@@ -194,7 +194,7 @@ public class StoredFilterQueryBuilder extends AbstractQueryBuilder<StoredFilterQ
                     // TODO: Convert extractValue to BytesRef
                     Object extractedValue = XContentMapValues.extractValue(termsLookup.path(), getResponse.getSourceAsMap());
 
-                    encodedValues = (BytesRef)extractedValue;
+                    encodedValues = new BytesRef(StoredFilterUtils.convertFieldValueToBytes(extractedValue, termsLookup.path()));
                 }
                 actionListener.onResponse(encodedValues);
             }
@@ -220,16 +220,14 @@ public class StoredFilterQueryBuilder extends AbstractQueryBuilder<StoredFilterQ
 
     @Override
     protected QueryBuilder doRewrite(QueryRewriteContext queryRewriteContext) {
-        QueryShardContext queryShardContext = queryRewriteContext.convertToShardContext();
-
-        if (encodedValuesSupplier != null) {
+        if (queryRewriteContext.shardId() == null || encodedValuesSupplier != null) {
             return this;
-        } else if (this.termsLookup != null && queryShardContext != null) {
+        } else if (this.termsLookup != null) {
 
             TermsLookup detokenizedTermsLookup = new TermsLookup(
                 termsLookup.index(),
                 termsLookup.type(),
-                termsLookup.id().replace(SHARD_ID_TOKEN, Integer.toString(queryShardContext.getShardId())),
+                termsLookup.id().replace(SHARD_ID_TOKEN, Integer.toString(queryRewriteContext.shardId())),
                 termsLookup.path()
             ).routing(termsLookup.routing());
 

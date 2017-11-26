@@ -99,7 +99,7 @@ public class QueryShardContext extends QueryRewriteContext {
             IndexFieldDataService indexFieldDataService, MapperService mapperService, SimilarityService similarityService,
             ScriptService scriptService, NamedXContentRegistry xContentRegistry,
             Client client, IndexReader reader, LongSupplier nowInMillis) {
-        super(xContentRegistry, client, nowInMillis);
+        super(xContentRegistry, client, nowInMillis, shardId);
         this.shardId = shardId;
         this.similarityService = similarityService;
         this.mapperService = mapperService;
